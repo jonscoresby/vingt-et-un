@@ -3,6 +3,7 @@ use rand::thread_rng;
 use std::io;
 
 fn create_shoe(size: u8) -> Vec<u8> {
+    println!();
     println!("Shuffling");
     let mut vec = Vec::new();
     (1..size * 4).for_each(|_| {
@@ -16,7 +17,6 @@ fn main() -> io::Result<()> {
     let mut shoe: Vec<u8> = create_shoe(4);
     loop {
         if shoe.len() < 20 {
-            //This is arbitrary, will improve later
             shoe = create_shoe(4)
         };
 
@@ -81,15 +81,17 @@ fn dealer_turn(mut dealer_hand: Vec<u8>, mut shoe: Vec<u8>) -> HandStatus {
         dealer_hand.push(shoe.pop().unwrap());
         hand_status = get_hand_status(dealer_hand.clone());
     }
+    println!();
     println!("Dealer's hand: {:?}", dealer_hand);
     hand_status
 }
 
 fn player_turn(mut player_hand: Vec<u8>, dealer_hand: Vec<u8>, shoe: &mut Vec<u8>) -> HandStatus {
     let x = 'l: loop {
+        println!();
         println!("Dealer Hand: [{}, ?]", dealer_hand[0]);
         println!("Your Hand: {:?}", player_hand);
-
+        println!();
         println!("Choose an action: (h)it, (s)tand ");
         loop {
             let mut hand_status = get_hand_status(player_hand.clone());
@@ -106,13 +108,12 @@ fn player_turn(mut player_hand: Vec<u8>, dealer_hand: Vec<u8>, shoe: &mut Vec<u8
                         _ => break 'l hand_status,
                     }
                 }
-                "d" => {}
-                "y" => {}
                 "s" => break 'l hand_status,
                 _ => println!("That is not valid action!"),
             }
         }
     };
+    println!();
     println!("Dealer Hand: [{}, ?]", dealer_hand[0]);
     println!("Your Hand: {:?}", player_hand);
     x
