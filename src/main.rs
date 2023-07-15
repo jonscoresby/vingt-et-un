@@ -3,8 +3,9 @@ use rand::thread_rng;
 use std::io;
 
 fn create_shoe(size: u8) -> Vec<u8> {
+    println!("Shuffling");
     let mut vec = Vec::new();
-    (1..size).for_each(|_| {
+    (1..size * 4).for_each(|_| {
         vec.extend([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10]);
     });
     vec.shuffle(&mut thread_rng());
@@ -12,19 +13,33 @@ fn create_shoe(size: u8) -> Vec<u8> {
 }
 
 fn main() -> io::Result<()> {
-    let game: GameOutcome = game();
-    match game {
-        GameOutcome::Win => println!("You Win"),
-        GameOutcome::Lose => println!("You Lose"),
-        GameOutcome::Push => println!("It's a draw"),
-        GameOutcome::Blackjack => println!("You win with a blackjack"),
+    let mut shoe: Vec<u8> = create_shoe(4);
+    loop {
+        if shoe.len() < 20 {
+            //This is arbitrary, will improve later
+            shoe = create_shoe(4)
+        };
+
+        match round(&mut shoe) {
+            RoundOutcome::Win => println!("You Win"),
+            RoundOutcome::Lose => println!("You Lose"),
+            RoundOutcome::Push => println!("It's a draw"),
+            RoundOutcome::Blackjack => println!("You win with a blackjack"),
+        };
+        println!("Press 'q' to quit. Press any other key to play again");
+        let stdin = io::stdin();
+        let mut user_input = String::new();
+        stdin.read_line(&mut user_input).unwrap();
+        let command = user_input.trim();
+        if command == "q" {
+            break;
+        }
     }
 
     Ok(())
 }
 
-fn game() -> GameOutcome {
-    let mut shoe = create_shoe(4);
+fn round(shoe: &mut Vec<u8>) -> RoundOutcome {
     let mut player_hand: Vec<u8> = Vec::new();
     let mut dealer_hand: Vec<u8> = Vec::new();
     player_hand.push(shoe.pop().unwrap());
@@ -36,22 +51,22 @@ fn game() -> GameOutcome {
         is_blackjack(player_hand.clone()),
         is_blackjack(dealer_hand.clone()),
     ) {
-        (true, true) => GameOutcome::Push,
-        (true, false) => GameOutcome::Blackjack,
-        (false, true) => GameOutcome::Lose,
-        (false, false) => play(player_hand, dealer_hand, shoe),
+        (true, true) => RoundOutcome::Push,
+        (true, false) => RoundOutcome::Blackjack,
+        (false, true) => RoundOutcome::Lose,
+        (false, false) => play(player_hand, dealer_hand, shoe.to_vec()),
     }
 }
 
-fn play(player_hand: Vec<u8>, dealer_hand: Vec<u8>, mut shoe: Vec<u8>) -> GameOutcome {
+fn play(player_hand: Vec<u8>, dealer_hand: Vec<u8>, mut shoe: Vec<u8>) -> RoundOutcome {
     match player_turn(player_hand, dealer_hand.clone(), &mut shoe) {
-        HandStatus::Bust => GameOutcome::Lose,
+        HandStatus::Bust => RoundOutcome::Lose,
         HandStatus::Value(p) => match dealer_turn(dealer_hand.clone(), shoe) {
-            HandStatus::Bust => GameOutcome::Win,
+            HandStatus::Bust => RoundOutcome::Win,
             HandStatus::Value(d) => match p.cmp(&d) {
-                std::cmp::Ordering::Less => GameOutcome::Lose,
-                std::cmp::Ordering::Equal => GameOutcome::Push,
-                std::cmp::Ordering::Greater => GameOutcome::Win,
+                std::cmp::Ordering::Less => RoundOutcome::Lose,
+                std::cmp::Ordering::Equal => RoundOutcome::Push,
+                std::cmp::Ordering::Greater => RoundOutcome::Win,
             },
         },
     }
@@ -75,7 +90,7 @@ fn player_turn(mut player_hand: Vec<u8>, dealer_hand: Vec<u8>, shoe: &mut Vec<u8
         println!("Dealer Hand: [{}, ?]", dealer_hand[0]);
         println!("Your Hand: {:?}", player_hand);
 
-        println!("Choose an action (h (Hit), s (stand)): ");
+        println!("Choose an action: (h)it, (s)tand ");
         loop {
             let mut hand_status = get_hand_status(player_hand.clone());
             let stdin = io::stdin();
@@ -98,9 +113,9 @@ fn player_turn(mut player_hand: Vec<u8>, dealer_hand: Vec<u8>, shoe: &mut Vec<u8
             }
         }
     };
-        println!("Dealer Hand: [{}, ?]", dealer_hand[0]);
-        println!("Your Hand: {:?}", player_hand);
-        x
+    println!("Dealer Hand: [{}, ?]", dealer_hand[0]);
+    println!("Your Hand: {:?}", player_hand);
+    x
 }
 
 fn get_hand_status(hand: Vec<u8>) -> HandStatus {
@@ -134,7 +149,7 @@ fn is_blackjack(hand: Vec<u8>) -> bool {
     get_hand_status(hand).is_blackjack()
 }
 
-enum GameOutcome {
+enum RoundOutcome {
     Win,
     Lose,
     Push,
