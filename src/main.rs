@@ -1,9 +1,9 @@
 use rand::seq::SliceRandom;
-use rand::thread_rng;
 use std::io;
 
 fn main() -> io::Result<()> {
     print_banner();
+
     let mut shoe: Vec<u8> = create_shoe(4);
     loop {
         if shoe.len() < 20 {
@@ -29,11 +29,12 @@ fn main() -> io::Result<()> {
 fn create_shoe(size: u8) -> Vec<u8> {
     println!();
     println!("Shuffling");
+
     let mut vec = Vec::new();
     (1..size * 4).for_each(|_| {
         vec.extend([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10]);
     });
-    vec.shuffle(&mut thread_rng());
+    vec.shuffle(&mut rand::thread_rng());
     vec
 }
 
@@ -45,100 +46,113 @@ fn get_command() -> String {
 }
 
 fn round(shoe: &mut Vec<u8>) -> RoundOutcome {
-    let mut player_hand: Vec<u8> = Vec::new();
-    let mut dealer_hand: Vec<u8> = Vec::new();
-    player_hand.push(shoe.pop().unwrap());
-    dealer_hand.push(shoe.pop().unwrap());
-    player_hand.push(shoe.pop().unwrap());
-    dealer_hand.push(shoe.pop().unwrap());
+    let mut player = Player::new();
+    let mut dealer = Player::new();
+    player.add_card(shoe.pop().unwrap());
+    dealer.add_card(shoe.pop().unwrap());
+    player.add_card(shoe.pop().unwrap());
+    dealer.add_card(shoe.pop().unwrap());
 
-    let outcome = match (is_blackjack(&player_hand), is_blackjack(&dealer_hand)) {
+    let outcome = match (player.is_blackjack(), dealer.is_blackjack()) {
         (true, true) => RoundOutcome::Push,
         (true, false) => RoundOutcome::Blackjack,
         (false, true) => RoundOutcome::Lose,
-        (false, false) => play(&mut player_hand, &mut dealer_hand, shoe),
+        (false, false) => play(&mut player, &mut dealer, shoe),
     };
-    print_hands(&dealer_hand, &player_hand, false);
+    print_hands(&dealer, &player, false);
     outcome
 }
 
-fn play( player_hand: &mut Vec<u8>, dealer_hand: &mut Vec<u8>, shoe: &mut Vec<u8>,) -> RoundOutcome {
-    match player_turn(player_hand, dealer_hand, shoe) {
+fn play(player: &mut Player, dealer: &mut Player, shoe: &mut Vec<u8>) -> RoundOutcome {
+    player_turn(player, dealer, shoe);
+    match player.status {
         HandStatus::Bust => RoundOutcome::Lose,
-        HandStatus::Value(p) => match dealer_turn(dealer_hand, shoe) {
-            HandStatus::Bust => RoundOutcome::Win,
-            HandStatus::Value(d) => match p.cmp(&d) {
-                std::cmp::Ordering::Less => RoundOutcome::Lose,
-                std::cmp::Ordering::Equal => RoundOutcome::Push,
-                std::cmp::Ordering::Greater => RoundOutcome::Win,
-            },
-        },
+        HandStatus::Value(p) => {
+            dealer_turn(dealer, shoe);
+            match dealer.status {
+                HandStatus::Bust => RoundOutcome::Win,
+                HandStatus::Value(d) => match p.cmp(&d) {
+                    std::cmp::Ordering::Less => RoundOutcome::Lose,
+                    std::cmp::Ordering::Equal => RoundOutcome::Push,
+                    std::cmp::Ordering::Greater => RoundOutcome::Win,
+                },
+            }
+        }
     }
 }
 
-fn dealer_turn(dealer_hand: &mut Vec<u8>, shoe: &mut Vec<u8>) -> HandStatus {
-    let mut hand_status = get_hand_status(&dealer_hand);
-    while match hand_status {
-        HandStatus::Value(n) if n < 17 => true,
-        _ => false,
-    } {
-        dealer_hand.push(shoe.pop().unwrap());
-        hand_status = get_hand_status(&dealer_hand);
+fn dealer_turn(dealer: &mut Player, shoe: &mut Vec<u8>) {
+    while dealer.status < HandStatus::Value(17) {
+        dealer.add_card(shoe.pop().unwrap());
     }
-    hand_status
 }
 
-fn player_turn(player_hand: &mut Vec<u8>, dealer_hand: &Vec<u8>, shoe: &mut Vec<u8>) -> HandStatus {
+fn player_turn(player: &mut Player, dealer: &Player, shoe: &mut Vec<u8>) {
     'l: loop {
-        print_hands(dealer_hand, player_hand, true);
+        print_hands(dealer, player, true);
         println!("Choose an action: (h)it, (s)tand ");
         loop {
-            let mut hand_status = get_hand_status(player_hand);
             match &get_command() as &str {
                 "h" => {
-                    player_hand.push(shoe.pop().unwrap());
-                    hand_status = get_hand_status(player_hand);
-                    match hand_status {
-                        HandStatus::Value(n) if n < 21 => break,
-                        _ => break 'l hand_status,
+                    if *player.add_card(shoe.pop().unwrap()) == HandStatus::Bust {
+                        break 'l;
+                    } else {
+                        break;
                     }
                 }
-                "s" => break 'l hand_status,
+                "s" => break 'l,
                 _ => println!("That is not valid action! Try again."),
             }
         }
     }
 }
 
-fn get_hand_status(hand: &Vec<u8>) -> HandStatus {
-    let mut aces: u8 = hand.iter().filter(|&n| *n == 1).count().try_into().unwrap();
-    let mut base_sum = aces * 10 + hand.iter().sum::<u8>();
+struct Player {
+    hand: Vec<u8>,
+    status: HandStatus,
+}
 
-    while base_sum > 21 && aces > 0 {
-        base_sum -= 10;
-        aces -= 1;
+impl Player {
+    fn new() -> Player {
+        Player {
+            hand: Vec::new(),
+            status: HandStatus::Value(0),
+        }
     }
-    if base_sum > 21 {
-        HandStatus::Bust
-    } else {
-        HandStatus::Value(base_sum)
+
+    fn add_card(&mut self, card: u8) -> &HandStatus {
+        self.hand.push(card);
+
+        let mut aces: u8 = self
+            .hand
+            .iter()
+            .filter(|&n| *n == 1)
+            .count()
+            .try_into()
+            .unwrap();
+        let mut base_sum = aces * 10 + self.hand.iter().sum::<u8>();
+
+        while base_sum > 21 && aces > 0 {
+            base_sum -= 10;
+            aces -= 1;
+        }
+        self.status = if base_sum > 21 {
+            HandStatus::Bust
+        } else {
+            HandStatus::Value(base_sum)
+        };
+        &self.status
+    }
+
+    fn is_blackjack(&self) -> bool {
+        self.status == HandStatus::Value(21)
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, PartialOrd)]
 enum HandStatus {
-    Bust,
     Value(u8),
-}
-
-impl HandStatus {
-    fn is_blackjack(self) -> bool {
-        self == HandStatus::Value(21)
-    }
-}
-
-fn is_blackjack(hand: &Vec<u8>) -> bool {
-    get_hand_status(hand).is_blackjack()
+    Bust,
 }
 
 enum RoundOutcome {
@@ -148,17 +162,17 @@ enum RoundOutcome {
     Blackjack,
 }
 
-fn print_hands(dealer_hand: &Vec<u8>, player_hand: &Vec<u8>, hide_hole_card: bool) {
+fn print_hands(dealer: &Player, player: &Player, hide_hole_card: bool) {
     println!();
 
     print!("Dealer Hand: ");
     if hide_hole_card {
-        println!("[?, {}]", dealer_hand[1])
+        println!("[?, {}]", dealer.hand[1])
     } else {
-        println!("{:?}", dealer_hand);
+        println!("{:?}", dealer.hand);
     }
 
-    println!("Player Hand: {:?}", player_hand);
+    println!("Player Hand: {:?}", player.hand);
     println!();
 }
 
