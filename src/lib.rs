@@ -9,12 +9,18 @@ fn create_shoe(size: u8) -> Vec<u8> {
     vec
 }
 
-#[derive(Hash)]
 pub enum Action {
+    Deal(u32),
     Hit,
     Stand,
-    Deal(u32),
+    Double,
     Split,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum RoundStatus {
+    Concluded,
+    InProgress(usize),
 }
 
 #[derive(PartialEq, PartialOrd, Copy, Clone)]
@@ -25,12 +31,6 @@ pub enum HandStatus {
     Push,
     Lose,
     Blackjack,
-}
-
-#[derive(PartialEq, Debug)]
-pub enum RoundStatus {
-    Concluded,
-    InProgress(usize),
 }
 
 pub struct Hand {
@@ -120,7 +120,12 @@ impl Table {
                     if active_hand.deal_card(&mut self.shoe) >= 21 {
                         self.next_hand();
                     }
-                }
+                },
+                Action::Double => {
+                    self.balance -= active_hand.bet_amount as f64;
+                    active_hand.bet_amount *= 2;
+                    self.take_action(Action::Hit);
+                },
                 Action::Split => {
                     if active_hand.is_splittable() {
                         self.balance -= active_hand.bet_amount as f64;
