@@ -15,6 +15,7 @@ pub enum Action {
     Stand,
     Double,
     Split,
+    Surrender,
 }
 
 #[derive(PartialEq, Debug)]
@@ -31,6 +32,7 @@ pub enum HandStatus {
     Push,
     Lose,
     Blackjack,
+    Surrender,
 }
 
 pub struct Hand {
@@ -113,6 +115,7 @@ impl Table {
 
     pub fn take_action(&mut self, action: Action) {
         if let RoundStatus::InProgress(active_hand_index) = self.status {
+            let first_action = self.player.len() == 1 && self.player[0].cards.len() == 2;
             let active_hand = &mut self.player[active_hand_index];
             match action {
                 Action::Stand => self.next_hand(),
@@ -120,12 +123,12 @@ impl Table {
                     if active_hand.deal_card(&mut self.shoe) >= 21 {
                         self.next_hand();
                     }
-                },
+                }
                 Action::Double => {
                     self.balance -= active_hand.bet_amount as f64;
                     active_hand.bet_amount *= 2;
                     self.take_action(Action::Hit);
-                },
+                }
                 Action::Split => {
                     if active_hand.is_splittable() {
                         self.balance -= active_hand.bet_amount as f64;
@@ -133,6 +136,15 @@ impl Table {
                         self.player.insert(active_hand_index + 1, new_hand);
                     } else {
                         todo!("can't split right now")
+                    }
+                }
+                Action::Surrender => {
+                    if first_action {
+                        self.balance += active_hand.bet_amount as f64 / 2f64;
+                        active_hand.status = HandStatus::Surrender;
+                        self.status = RoundStatus::Concluded;
+                    } else {
+                        todo!("can't surrender")
                     }
                 }
                 Action::Deal(_) => todo!("can't deal right now"),
@@ -155,7 +167,7 @@ impl Table {
                     (HandStatus::Blackjack, _) => {
                         self.balance += self.player[0].bet_amount as f64 * 5f64 / 2f64;
                         HandStatus::Blackjack
-                    },
+                    }
                     (_, HandStatus::Blackjack) => HandStatus::Lose,
                     _ => {
                         self.status = RoundStatus::InProgress(0);
@@ -197,7 +209,9 @@ impl Table {
     }
 
     fn dealer_turn(&mut self) {
-        while self.dealer.value < 17 {self.dealer.deal_card(&mut self.shoe);}
+        while self.dealer.value < 17 {
+            self.dealer.deal_card(&mut self.shoe);
+        }
         for hand in &mut self.player {
             if let HandStatus::Value = hand.status {
                 hand.status = if let HandStatus::Value = self.dealer.status {
