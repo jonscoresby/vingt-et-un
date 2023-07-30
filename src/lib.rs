@@ -9,11 +9,11 @@ fn create_shoe(size: u8) -> Vec<u8> {
     vec
 }
 
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Hash)]
 pub enum Action {
     Hit,
     Stand,
-    Deal,
+    Deal(u32),
     Split,
 }
 
@@ -37,14 +37,16 @@ pub struct Hand {
     pub cards: Vec<u8>,
     pub status: HandStatus,
     pub value: u8,
+    pub bet_amount: u32,
 }
 
 impl Hand {
-    fn new() -> Hand {
+    fn new(bet_amout: u32) -> Hand {
         Hand {
             cards: Vec::new(),
             status: HandStatus::Value,
             value: 0,
+            bet_amount: bet_amout,
         }
     }
 
@@ -53,6 +55,7 @@ impl Hand {
             cards: vec![self.cards.pop().unwrap()],
             status: HandStatus::Value,
             value: 0,
+            bet_amount: self.bet_amount,
         };
         self.deal_card(shoe);
         new_hand.deal_card(shoe);
@@ -93,17 +96,18 @@ pub struct Table {
     pub player: Vec<Hand>,
     pub dealer: Hand,
     pub status: RoundStatus,
+    pub balance: f64,
 }
 
 impl Table {
-    pub fn new() -> Table {
-        let mut game = Table {
+    pub fn new(balance: f64) -> Table {
+        let game = Table {
             shoe: Vec::new(),
-            player: vec![Hand::new()],
-            dealer: Hand::new(),
+            player: vec![Hand::new(0)],
+            dealer: Hand::new(0),
             status: RoundStatus::Concluded,
+            balance,
         };
-        game.take_action(Action::Deal);
         game
     }
 
@@ -119,28 +123,34 @@ impl Table {
                 }
                 Action::Split => {
                     if active_hand.is_splittable() {
+                        self.balance -= active_hand.bet_amount as f64;
                         let new_hand = active_hand.split(&mut self.shoe);
                         self.player.insert(active_hand_index + 1, new_hand);
                     } else {
                         todo!("can't split right now")
                     }
                 }
-                Action::Deal => todo!("can't deal right now"),
+                Action::Deal(_) => todo!("can't deal right now"),
             }
         } else {
-            if let Action::Deal = action {
+            if let Action::Deal(bet_amount) = action {
+                self.balance -= bet_amount as f64;
                 if self.shoe.len() < 20 {
                     self.shoe = create_shoe(4);
                 }
-                self.dealer = self.new_hand();
-                self.player = vec![self.new_hand()];
+                self.dealer = self.new_hand(0);
+                self.player = vec![self.new_hand(bet_amount)];
 
                 self.player[0].status = match (&self.player[0].status, &self.dealer.status) {
                     (HandStatus::Blackjack, HandStatus::Blackjack) => {
+                        self.balance += self.player[0].bet_amount as f64;
                         self.dealer.status = HandStatus::Push;
                         HandStatus::Push
                     }
-                    (HandStatus::Blackjack, _) => HandStatus::Blackjack,
+                    (HandStatus::Blackjack, _) => {
+                        self.balance += self.player[0].bet_amount as f64 * 5f64 / 2f64;
+                        HandStatus::Blackjack
+                    },
                     (_, HandStatus::Blackjack) => HandStatus::Lose,
                     _ => {
                         self.status = RoundStatus::InProgress(0);
@@ -153,8 +163,8 @@ impl Table {
         }
     }
 
-    fn new_hand(&mut self) -> Hand {
-        let mut hand = Hand::new();
+    fn new_hand(&mut self, bet_amount: u32) -> Hand {
+        let mut hand = Hand::new(bet_amount);
 
         hand.deal_card(&mut self.shoe);
         if hand.deal_card(&mut self.shoe) == 21 {
@@ -194,6 +204,11 @@ impl Table {
                 } else {
                     HandStatus::Win
                 }
+            }
+            self.balance += match hand.status {
+                HandStatus::Win => hand.bet_amount as f64 * 2f64,
+                HandStatus::Push => hand.bet_amount as f64,
+                _ => 0f64,
             }
         }
     }
