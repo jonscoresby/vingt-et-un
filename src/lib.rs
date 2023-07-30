@@ -9,6 +9,7 @@ fn create_shoe(size: u8) -> Vec<u8> {
     vec
 }
 
+#[derive(PartialEq, Copy, Clone)]
 pub enum Action {
     Deal(u32),
     Hit,
@@ -35,6 +36,7 @@ pub enum HandStatus {
     Surrender,
 }
 
+#[derive(Clone)]
 pub struct Hand {
     pub cards: Vec<u8>,
     pub status: HandStatus,
@@ -88,7 +90,7 @@ impl Hand {
         self.value
     }
 
-    fn is_splittable(&self) -> bool {
+    fn can_split(&self) -> bool {
         self.cards.len() == 2 && self.cards[0] == self.cards[1]
     }
 }
@@ -103,19 +105,18 @@ pub struct Table {
 
 impl Table {
     pub fn new(balance: f64) -> Table {
-        let game = Table {
+        Table {
             shoe: Vec::new(),
             player: vec![Hand::new(0)],
             dealer: Hand::new(0),
             status: RoundStatus::Concluded,
             balance,
-        };
-        game
+        }
     }
 
     pub fn take_action(&mut self, action: Action) {
         if let RoundStatus::InProgress(active_hand_index) = self.status {
-            let first_action = self.player.len() == 1 && self.player[0].cards.len() == 2;
+            let can_surrender = self.can_surrender();
             let active_hand = &mut self.player[active_hand_index];
             match action {
                 Action::Stand => self.next_hand(),
@@ -130,7 +131,7 @@ impl Table {
                     self.take_action(Action::Hit);
                 }
                 Action::Split => {
-                    if active_hand.is_splittable() {
+                    if active_hand.can_split() {
                         self.balance -= active_hand.bet_amount as f64;
                         let new_hand = active_hand.split(&mut self.shoe);
                         self.player.insert(active_hand_index + 1, new_hand);
@@ -139,7 +140,7 @@ impl Table {
                     }
                 }
                 Action::Surrender => {
-                    if first_action {
+                    if can_surrender {
                         self.balance += active_hand.bet_amount as f64 / 2f64;
                         active_hand.status = HandStatus::Surrender;
                         self.status = RoundStatus::Concluded;
@@ -230,5 +231,29 @@ impl Table {
                 _ => 0f64,
             }
         }
+    }
+
+    pub fn can_split(&self) -> bool {
+        if let RoundStatus::InProgress(i) = self.status {
+            self.player[i].can_split()
+        } else {
+            false
+        }
+    }
+
+    pub fn can_surrender(&self) -> bool {
+        self.player.len() == 1 && self.player[0].cards.len() == 2 && self.can_take_basic_actions()
+    }
+
+    pub fn can_double(&self) -> bool {
+        self.can_take_basic_actions()
+    }
+
+    pub fn can_deal(&self) -> bool {
+        self.status == RoundStatus::Concluded
+    }
+
+    pub fn can_take_basic_actions(&self) -> bool {
+        !self.can_deal()
     }
 }
