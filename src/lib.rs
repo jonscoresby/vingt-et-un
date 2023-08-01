@@ -54,7 +54,7 @@ impl Hand {
         }
     }
 
-    fn split(&mut self, shoe: &mut Vec<u8>) -> Hand {
+    fn split(&mut self, shoe: &mut Vec<u8>) -> (Hand, u8) {
         let mut new_hand = Hand {
             cards: vec![self.cards.pop().unwrap()],
             status: HandStatus::Value,
@@ -63,7 +63,7 @@ impl Hand {
         };
         self.deal_card(shoe);
         new_hand.deal_card(shoe);
-        new_hand
+        (new_hand, self.value)
     }
 
     fn deal_card(&mut self, shoe: &mut Vec<u8>) -> u8 {
@@ -133,8 +133,9 @@ impl Table {
                 Action::Split => {
                     if active_hand.can_split() {
                         self.balance -= active_hand.bet_amount as f64;
-                        let new_hand = active_hand.split(&mut self.shoe);
+                        let (new_hand, old_hand_value) = active_hand.split(&mut self.shoe);
                         self.player.insert(active_hand_index + 1, new_hand);
+                        if old_hand_value >= 21 { self.next_hand()}
                     } else {
                         todo!("can't split right now")
                     }
@@ -143,7 +144,7 @@ impl Table {
                     if can_surrender {
                         self.balance += active_hand.bet_amount as f64 / 2f64;
                         active_hand.status = HandStatus::Surrender;
-                        self.status = RoundStatus::Concluded;
+                        self.next_hand();
                     } else {
                         todo!("can't surrender")
                     }
@@ -210,6 +211,7 @@ impl Table {
     }
 
     fn dealer_turn(&mut self) {
+        if self.player.iter().all(|hand| hand.status == HandStatus::Bust || hand.status == HandStatus::Surrender) {return;}
         while self.dealer.value < 17 {
             self.dealer.deal_card(&mut self.shoe);
         }
