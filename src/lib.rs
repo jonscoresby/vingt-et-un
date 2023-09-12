@@ -41,6 +41,7 @@ pub struct Hand {
     pub cards: Vec<u8>,
     pub status: HandStatus,
     pub value: u8,
+    pub soft: bool,
     pub bet_amount: f64,
 }
 
@@ -50,6 +51,7 @@ impl Hand {
             cards: Vec::new(),
             status: HandStatus::Value,
             value: 0,
+            soft: false,
             bet_amount: bet_amout,
         }
     }
@@ -59,6 +61,7 @@ impl Hand {
             cards: vec![self.cards.pop().unwrap()],
             status: HandStatus::Value,
             value: 0,
+            soft: false,
             bet_amount: self.bet_amount,
         };
         self.deal_card(shoe);
@@ -69,18 +72,12 @@ impl Hand {
     fn deal_card(&mut self, shoe: &mut Vec<u8>) -> u8 {
         self.cards.push(shoe.pop().unwrap());
 
-        let mut aces: u8 = self
-            .cards
-            .iter()
-            .filter(|&n| *n == 1)
-            .count()
-            .try_into()
-            .unwrap();
-        self.value = aces * 10 + self.cards.iter().sum::<u8>();
+        let aces = self.cards.iter().filter(|&n| *n == 1).count();
+        self.value = self.cards.iter().sum::<u8>();
 
-        while self.value > 21 && aces > 0 {
-            self.value -= 10;
-            aces -= 1;
+        self.soft = self.value < 12 && aces > 0; 
+        if self.soft {
+            self.value += 10;
         }
 
         if self.value > 21 {

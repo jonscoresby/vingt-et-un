@@ -34,7 +34,7 @@ fn main() -> io::Result<()> {
             prompt += "sp(l)it, ";
         }
         if game.can_surrender() {
-            possible_actions.insert("r", Action::Surrender);
+            possible_actions.insert("u", Action::Surrender);
             prompt += "s(u)rrender, ";
         }
         prompt += "(q)uit";
@@ -82,7 +82,11 @@ fn print_game(dealer: &Hand, player: &Vec<Hand>, active_hand: &RoundStatus, bala
                 "{}Player Hand: {:?} {} {} {}",
                 if *n == i { ">" } else { " " },
                 hand.cards,
-                hand.value,
+                if hand.soft {
+                    format!("{}/{}", hand.value - 10, hand.value)
+                } else {
+                    hand.value.to_string()
+                },
                 hand.bet_amount,
                 hand_message(hand.status)
             )
