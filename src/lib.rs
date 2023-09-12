@@ -11,7 +11,7 @@ fn create_shoe(size: u8) -> Vec<u8> {
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum Action {
-    Deal(u32),
+    Deal(f64),
     Hit,
     Stand,
     Double,
@@ -41,11 +41,11 @@ pub struct Hand {
     pub cards: Vec<u8>,
     pub status: HandStatus,
     pub value: u8,
-    pub bet_amount: u32,
+    pub bet_amount: f64,
 }
 
 impl Hand {
-    fn new(bet_amout: u32) -> Hand {
+    fn new(bet_amout: f64) -> Hand {
         Hand {
             cards: Vec::new(),
             status: HandStatus::Value,
@@ -107,8 +107,8 @@ impl Table {
     pub fn new(balance: f64) -> Table {
         Table {
             shoe: Vec::new(),
-            player: vec![Hand::new(0)],
-            dealer: Hand::new(0),
+            player: vec![Hand::new(0.0)],
+            dealer: Hand::new(0.0),
             status: RoundStatus::Concluded,
             balance,
         }
@@ -126,13 +126,13 @@ impl Table {
                     }
                 }
                 Action::Double => {
-                    self.balance -= active_hand.bet_amount as f64;
-                    active_hand.bet_amount *= 2;
+                    self.balance -= active_hand.bet_amount;
+                    active_hand.bet_amount *= 2.0;
                     self.take_action(Action::Hit);
                 }
                 Action::Split => {
                     if active_hand.can_split() {
-                        self.balance -= active_hand.bet_amount as f64;
+                        self.balance -= active_hand.bet_amount;
                         let (new_hand, old_hand_value) = active_hand.split(&mut self.shoe);
                         self.player.insert(active_hand_index + 1, new_hand);
                         if old_hand_value >= 21 { self.next_hand()}
@@ -142,7 +142,7 @@ impl Table {
                 }
                 Action::Surrender => {
                     if can_surrender {
-                        self.balance += active_hand.bet_amount as f64 / 2f64;
+                        self.balance += active_hand.bet_amount / 2.0;
                         active_hand.status = HandStatus::Surrender;
                         self.next_hand();
                     } else {
@@ -153,21 +153,21 @@ impl Table {
             }
         } else {
             if let Action::Deal(bet_amount) = action {
-                self.balance -= bet_amount as f64;
+                self.balance -= bet_amount;
                 if self.shoe.len() < 20 {
                     self.shoe = create_shoe(4);
                 }
-                self.dealer = self.new_hand(0);
+                self.dealer = self.new_hand(0.0);
                 self.player = vec![self.new_hand(bet_amount)];
 
                 self.player[0].status = match (&self.player[0].status, &self.dealer.status) {
                     (HandStatus::Blackjack, HandStatus::Blackjack) => {
-                        self.balance += self.player[0].bet_amount as f64;
+                        self.balance += self.player[0].bet_amount;
                         self.dealer.status = HandStatus::Push;
                         HandStatus::Push
                     }
                     (HandStatus::Blackjack, _) => {
-                        self.balance += self.player[0].bet_amount as f64 * 5f64 / 2f64;
+                        self.balance += self.player[0].bet_amount * 5.0 / 2.0;
                         HandStatus::Blackjack
                     }
                     (_, HandStatus::Blackjack) => HandStatus::Lose,
@@ -182,7 +182,7 @@ impl Table {
         }
     }
 
-    fn new_hand(&mut self, bet_amount: u32) -> Hand {
+    fn new_hand(&mut self, bet_amount: f64) -> Hand {
         let mut hand = Hand::new(bet_amount);
 
         hand.deal_card(&mut self.shoe);
@@ -228,9 +228,9 @@ impl Table {
                 }
             }
             self.balance += match hand.status {
-                HandStatus::Win => hand.bet_amount as f64 * 2f64,
-                HandStatus::Push => hand.bet_amount as f64,
-                _ => 0f64,
+                HandStatus::Win => hand.bet_amount * 2.0,
+                HandStatus::Push => hand.bet_amount,
+                _ => 0.0,
             }
         }
     }

@@ -14,7 +14,7 @@ fn main() -> io::Result<()> {
         let mut prompt = "Choose an action: ".to_owned();
         if game.can_deal() {
             let bet = game.player[0].bet_amount;
-            if bet > 0 {
+            if bet > 0.0 {
                 prompt += "(r)ebet, ";
                 possible_actions.insert("r", Action::Deal(bet));
             }
@@ -61,10 +61,10 @@ fn get_command() -> String {
     return user_input.trim().to_owned();
 }
 
-fn get_bet_amount() -> u32 {
+fn get_bet_amount() -> f64 {
     loop {
         println!("Enter a new bet amount:");
-        let new_bet: Result<u32, _> = get_command().parse();
+        let new_bet: Result<f64, _> = get_command().parse();
         if new_bet.is_ok() {
             return new_bet.unwrap();
         }
@@ -134,5 +134,5 @@ pub fn print_banner() {
     println!(r"      \_/    |__/|__/  |__/ \____  $$   \___/        |________/ \___/         \______/ |__/  |__/");
     println!(r"                            /$$  \ $$                                                            ");
     println!(r"                           |  $$$$$$/                                                            ");
-    println!(r"                            \______/             ");
+    println!(r"                            \______/                                                             ");
 }
