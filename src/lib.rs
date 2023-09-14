@@ -75,7 +75,7 @@ impl Hand {
         let aces = self.cards.iter().filter(|&n| *n == 1).count();
         self.value = self.cards.iter().sum::<u8>();
 
-        self.soft = self.value < 12 && aces > 0; 
+        self.soft = self.value < 12 && aces > 0;
         if self.soft {
             self.value += 10;
         }
@@ -111,39 +111,56 @@ impl Table {
         }
     }
 
-    pub fn take_action(&mut self, action: Action) {
+    pub fn take_action(&mut self, action: Action) -> Result<(), ()> {
         if let RoundStatus::InProgress(active_hand_index) = self.status {
-            let can_surrender = self.can_surrender();
-            let active_hand = &mut self.player[active_hand_index];
             match action {
-                Action::Stand => self.next_hand(),
+                Action::Stand => {
+                    if self.can_take_basic_actions() {
+                        Ok(self.next_hand())
+                    } else {
+                        Result::Err(())
+                    }
+                }
                 Action::Hit => {
-                    if active_hand.deal_card(&mut self.shoe) >= 21 {
-                        self.next_hand();
+                    if self.can_take_basic_actions() {
+                        if (&mut self.player[active_hand_index]).deal_card(&mut self.shoe) >= 21 {
+                            self.next_hand();
+                        }
+                        Result::Ok(())
+                    } else {
+                        Result::Err(())
                     }
                 }
                 Action::Double => {
-                    self.balance -= active_hand.bet_amount;
-                    active_hand.bet_amount *= 2.0;
-                    self.take_action(Action::Hit);
+                    if self.can_double() {
+                        self.balance -= (&mut self.player[active_hand_index]).bet_amount;
+                        (&mut self.player[active_hand_index]).bet_amount *= 2.0;
+                        self.take_action(Action::Hit)
+                    } else {
+                        Result::Err(())
+                    }
                 }
                 Action::Split => {
-                    if active_hand.can_split() {
-                        self.balance -= active_hand.bet_amount;
-                        let (new_hand, old_hand_value) = active_hand.split(&mut self.shoe);
+                    if self.can_split() {
+                        self.balance -= (&mut self.player[active_hand_index]).bet_amount;
+                        let (new_hand, old_hand_value) =
+                            (&mut self.player[active_hand_index]).split(&mut self.shoe);
                         self.player.insert(active_hand_index + 1, new_hand);
-                        if old_hand_value >= 21 { self.next_hand()}
+                        if old_hand_value >= 21 {
+                            self.next_hand()
+                        }
+                        Result::Ok(())
                     } else {
-                        todo!("can't split right now")
+                        Result::Err(())
                     }
                 }
                 Action::Surrender => {
-                    if can_surrender {
-                        self.balance += active_hand.bet_amount / 2.0;
-                        active_hand.status = HandStatus::Surrender;
-                        self.next_hand();
+                    if self.can_surrender() {
+                        self.balance += (&mut self.player[active_hand_index]).bet_amount / 2.0;
+                        (&mut self.player[active_hand_index]).status = HandStatus::Surrender;
+                        Ok(self.next_hand())
                     } else {
-                        todo!("can't surrender")
+                        Result::Err(())
                     }
                 }
                 Action::Deal(_) => todo!("can't deal right now"),
@@ -173,8 +190,9 @@ impl Table {
                         self.player[0].status
                     }
                 };
+                Result::Ok(())
             } else {
-                todo!("invalid action. start game with deal");
+                Result::Err(())
             }
         }
     }
@@ -208,7 +226,13 @@ impl Table {
     }
 
     fn dealer_turn(&mut self) {
-        if self.player.iter().all(|hand| hand.status == HandStatus::Bust || hand.status == HandStatus::Surrender) {return;}
+        if self
+            .player
+            .iter()
+            .all(|hand| hand.status == HandStatus::Bust || hand.status == HandStatus::Surrender)
+        {
+            return;
+        }
         while self.dealer.value < 17 {
             self.dealer.deal_card(&mut self.shoe);
         }

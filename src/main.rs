@@ -41,13 +41,16 @@ fn main() -> io::Result<()> {
         println!("{}", prompt);
 
         let command = get_command();
-        match command.as_str() {
+        match match command.as_str() {
             "q" => break,
             "n" => game.take_action(Action::Deal(get_bet_amount())),
             _ => match possible_actions.get(command.as_str()) {
                 Some(action) => game.take_action(*action),
-                None => println!("That is not valid action! Try again."),
+                None => Err(()),
             },
+        } {
+            Err(_) => print!("Not a valid action! Try again."),
+            _ => (),
         }
     }
 
