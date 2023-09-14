@@ -1,14 +1,23 @@
-use std::{collections::HashMap, io};
-
+use console::Term;
+use std::collections::HashMap;
 use vingt_et_un::{Action, Hand, HandStatus, RoundStatus, Table};
 
-fn main() -> io::Result<()> {
+fn main() {
     print_banner();
+    let term = Term::stdout();
     let mut game = Table::new(100.0);
-    let mut possible_actions = HashMap::<&str, Action>::new();
+    let mut possible_actions = HashMap::<char, Action>::new();
 
     loop {
-        print_game(&game.dealer, &game.player, &game.status, game.balance);
+        if !game.player[0].cards.is_empty() {
+            print_game(
+                &term,
+                &game.dealer,
+                &game.player,
+                &game.status,
+                game.balance,
+            );
+        }
 
         possible_actions.clear();
         let mut prompt = "Choose an action: ".to_owned();
@@ -16,35 +25,35 @@ fn main() -> io::Result<()> {
             let bet = game.player[0].bet_amount;
             if bet > 0.0 {
                 prompt += "(r)ebet, ";
-                possible_actions.insert("r", Action::Deal(bet));
+                possible_actions.insert('r', Action::Deal(bet));
             }
             prompt += "(n)ew bet, ";
         }
         if game.can_take_basic_actions() {
-            possible_actions.insert("h", Action::Hit);
-            possible_actions.insert("s", Action::Stand);
+            possible_actions.insert('h', Action::Hit);
+            possible_actions.insert('s', Action::Stand);
             prompt += "(h)it, (s)tand, "
         }
         if game.can_double() {
-            possible_actions.insert("d", Action::Double);
+            possible_actions.insert('d', Action::Double);
             prompt += "(d)ouble, ";
         }
         if game.can_split() {
-            possible_actions.insert("l", Action::Split);
+            possible_actions.insert('l', Action::Split);
             prompt += "sp(l)it, ";
         }
         if game.can_surrender() {
-            possible_actions.insert("u", Action::Surrender);
+            possible_actions.insert('u', Action::Surrender);
             prompt += "s(u)rrender, ";
         }
         prompt += "(q)uit";
         println!("{}", prompt);
 
-        let command = get_command();
-        match match command.as_str() {
-            "q" => break,
-            "n" => game.take_action(Action::Deal(get_bet_amount())),
-            _ => match possible_actions.get(command.as_str()) {
+        let command = term.read_char().unwrap();
+        match match command {
+            'q' => break,
+            'n' => game.take_action(Action::Deal(get_bet_amount(&term))),
+            _ => match possible_actions.get(&command) {
                 Some(action) => game.take_action(*action),
                 None => Err(()),
             },
@@ -53,36 +62,34 @@ fn main() -> io::Result<()> {
             _ => (),
         }
     }
-
-    Ok(())
 }
 
-fn get_command() -> String {
-    let stdin = io::stdin();
-    let mut user_input = String::new();
-    stdin.read_line(&mut user_input).unwrap();
-    return user_input.trim().to_owned();
-}
-
-fn get_bet_amount() -> f64 {
+fn get_bet_amount(term: &Term) -> f64 {
+    println!("Enter a new bet amount:");
     loop {
-        println!("Enter a new bet amount:");
-        let new_bet: Result<f64, _> = get_command().parse();
+        let new_bet: Result<f64, _> = term.read_line().unwrap().parse();
         if new_bet.is_ok() {
             return new_bet.unwrap();
         }
-        print!("Invalid value. Try again.")
+        println!("Invalid value. Try again.")
     }
 }
 
-fn print_game(dealer: &Hand, player: &Vec<Hand>, active_hand: &RoundStatus, balance: f64) {
+fn print_game(
+    term: &Term,
+    dealer: &Hand,
+    player: &Vec<Hand>,
+    active_hand: &RoundStatus,
+    balance: f64,
+) {
+    term.clear_screen().unwrap();
     println!();
     print!(" Dealer Hand: ");
     if let RoundStatus::InProgress(n) = active_hand {
         println!("[?, {}]", dealer.cards[1]);
         player.iter().enumerate().for_each(|(i, hand)| {
             println!(
-                "{}Player Hand: {:?} {} {} {}",
+                "{}Player Hand: {:?} {} {}   Bet: ${}",
                 if *n == i { ">" } else { " " },
                 hand.cards,
                 if hand.soft {
@@ -90,8 +97,8 @@ fn print_game(dealer: &Hand, player: &Vec<Hand>, active_hand: &RoundStatus, bala
                 } else {
                     hand.value.to_string()
                 },
+                hand_message(hand.status),
                 hand.bet_amount,
-                hand_message(hand.status)
             )
         });
     } else {
@@ -103,11 +110,11 @@ fn print_game(dealer: &Hand, player: &Vec<Hand>, active_hand: &RoundStatus, bala
         );
         player.iter().for_each(|hand| {
             println!(
-                " Player Hand: {:?} {} {} {}",
+                " Player Hand: {:?} {} {}  Bet: ${} ",
                 hand.cards,
                 hand.value,
+                hand_message(hand.status),
                 hand.bet_amount,
-                hand_message(hand.status)
             )
         });
     }
