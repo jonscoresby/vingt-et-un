@@ -1,125 +1,90 @@
 use console::Term;
-use rand::seq::SliceRandom;
 use std::collections::HashMap;
-use vingt_et_un::*;
-
-struct StandardShoe {
-    deck: Vec<u8>,
-    size: u8,
-}
-impl StandardShoe {
-    fn new(size: u8) -> StandardShoe {
-        let mut vec = Vec::new();
-        (0..size * 4).for_each(|_| {
-            vec.extend([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10]);
-        });
-        vec.shuffle(&mut rand::thread_rng());
-
-        StandardShoe { deck: vec, size }
-    }
-}
-impl Shoe for StandardShoe {
-    fn deal(&mut self) -> u8 {
-        self.deck.pop().unwrap()
-    }
-
-    fn on_new_round(&mut self) {
-        if self.deck.len() < 20 {
-            *self = StandardShoe::new(self.size);
-        }
-    }
-}
+use vingt_et_un::{Action, HandStatus, play, PossibleAction, RoundStatus, Table};
 
 fn main() {
     print_banner();
-    let term = Term::stdout();
+    play(get_action, get_bet);
+}
 
-    let mut game = Table::new(Box::new(StandardShoe::new(4)));
-    let mut possible_actions = HashMap::<char, Action>::new();
+fn get_action<'a>(game: &Table, possible: Vec<&'a PossibleAction>) -> &'a PossibleAction {
+    print_game(game);
+
+    let mut prompt = "Choose an action: ".to_owned();
+    let mut possible_actions = HashMap::<char, &PossibleAction>::new();
+    for i in possible {
+        match i.action() {
+            Action::Hit => {
+                possible_actions.insert('h', i);
+                prompt += "(h)it, "
+            }
+            Action::Stand => {
+                possible_actions.insert('s', i);
+                prompt += "(s)tand, "
+            }
+            Action::Double => {
+                possible_actions.insert('d', i);
+                prompt += "(d)ouble, "
+            }
+            Action::Split => {
+                possible_actions.insert('l', i);
+                prompt += "sp(l)it, ";
+            }
+            Action::Surrender => {
+                possible_actions.insert('u', i);
+                prompt += "s(u)rrender, "
+            }
+        }
+    }
+
+    prompt += "(q)uit";
+    println!("{}", prompt);
 
     loop {
-        if !game.player[0].cards.is_empty() {
-            print_game(
-                &term,
-                &game.dealer,
-                &game.player,
-                &game.status,
-                game.balance,
-            );
-        }
-
-        possible_actions.clear();
-        let mut prompt = "Choose an action: ".to_owned();
-        if game.can_deal() {
-            let bet = game.player[0].bet_amount;
-            if bet > 0.0 {
-                prompt += "(r)ebet, ";
-                possible_actions.insert('r', Action::Deal(bet));
+        match Term::stdout().read_char().unwrap() {
+            'q' => std::process::exit(0),
+            c => match possible_actions.get(&c) {
+                None => println!("Invalid action"),
+                Some(x) => break x
             }
-            prompt += "(n)ew bet, ";
-        }
-        if game.can_take_basic_actions() {
-            possible_actions.insert('h', Action::Hit);
-            possible_actions.insert('s', Action::Stand);
-            prompt += "(h)it, (s)tand, "
-        }
-        if game.can_double() {
-            possible_actions.insert('d', Action::Double);
-            prompt += "(d)ouble, ";
-        }
-        if game.can_split() {
-            possible_actions.insert('l', Action::Split);
-            prompt += "sp(l)it, ";
-        }
-        if game.can_surrender() {
-            possible_actions.insert('u', Action::Surrender);
-            prompt += "s(u)rrender, ";
-        }
-        prompt += "(q)uit";
-        println!("{}", prompt);
-
-        let command = term.read_char().unwrap();
-        match match command {
-            'q' => break,
-            'n' => game.take_action(Action::Deal(get_bet_amount(&term))),
-            _ => match possible_actions.get(&command) {
-                Some(action) => game.take_action(*action),
-                None => Err(()),
-            },
-        } {
-            Err(_) => print!("Not a valid action! Try again."),
-            _ => (),
         }
     }
 }
 
-fn get_bet_amount(term: &Term) -> f64 {
+fn get_bet(game: &Table) -> f64 {
+    print_game(game);
+    println!("Choose an action: (r)ebet, (n)ew bet");
+    loop {
+        match Term::stdout().read_char().unwrap() {
+            'q' => std::process::exit(0),
+            'r' => break game.player[0].bet_amount,
+            'n' => break get_bet_amount(),
+            _ => println!("Invalid action")
+        }
+    }
+}
+
+fn get_bet_amount() -> f64 {
     println!("Enter a new bet amount:");
     loop {
-        let new_bet: Result<f64, _> = term.read_line().unwrap().parse();
-        if new_bet.is_ok() {
-            return new_bet.unwrap();
+        let new_bet: Result<f64, _> = Term::stdout().read_line().unwrap().parse();
+        match new_bet {
+            Ok(x) => break x,
+            Err(_) => println!("Invalid value. Try again."),
         }
-        println!("Invalid value. Try again.")
     }
 }
 
-fn print_game(
-    term: &Term,
-    dealer: &Hand,
-    player: &Vec<Hand>,
-    active_hand: &RoundStatus,
-    balance: f64,
-) {
-    term.clear_screen().unwrap();
+fn print_game(game: &Table) {
+    Term::stdout().clear_screen().unwrap();
     println!();
     print!(" Dealer Hand: ");
-    if let RoundStatus::InProgress(n) = active_hand {
-        println!("[?, {}]", dealer.cards[1]);
-        player.iter().enumerate().for_each(|(i, hand)| {
+    if let RoundStatus::InProgress(n) = game.status {
+        println!("[?, {}]", game.dealer.cards[1]);
+        game.player.iter().enumerate().for_each(|(i, hand)| {
             println!(
                 "{}Player Hand: {:?} {} {}   Bet: ${}",
-                if *n == i { ">" } else { " " },
+                if n == i { ">" } else { " " },
                 hand.cards,
                 if hand.soft {
                     format!("{}/{}", hand.value - 10, hand.value)
@@ -133,11 +98,11 @@ fn print_game(
     } else {
         println!(
             "{:?} {} {}",
-            dealer.cards,
-            dealer.value,
-            hand_message(dealer.status)
+            game.dealer.cards,
+            game.dealer.value,
+            hand_message(game.dealer.status)
         );
-        player.iter().for_each(|hand| {
+        game.player.iter().for_each(|hand| {
             println!(
                 " Player Hand: {:?} {} {}  Bet: ${} ",
                 hand.cards,
@@ -148,7 +113,7 @@ fn print_game(
         });
     }
 
-    println!("Current Balance: {}", balance);
+    println!("Current Balance: {}", game.balance);
     println!();
 }
 
