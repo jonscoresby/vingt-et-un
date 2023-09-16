@@ -1,14 +1,7 @@
-use rand::seq::SliceRandom;
-
-fn create_shoe(size: u8) -> Vec<u8> {
-    let mut vec = Vec::new();
-    (0..size * 4).for_each(|_| {
-        vec.extend([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10]);
-    });
-    vec.shuffle(&mut rand::thread_rng());
-    vec
+pub trait Shoe {
+    fn deal(&mut self) -> u8;
+    fn on_new_round(&mut self) {}
 }
-
 #[derive(PartialEq, Copy, Clone)]
 pub enum Action {
     Deal(f64),
@@ -36,7 +29,6 @@ pub enum HandStatus {
     Surrender,
 }
 
-#[derive(Clone)]
 pub struct Hand {
     pub cards: Vec<u8>,
     pub status: HandStatus,
@@ -56,7 +48,16 @@ impl Hand {
         }
     }
 
-    fn split(&mut self, shoe: &mut Vec<u8>) -> (Hand, u8) {
+    fn next_hand(&mut self, bet_amount: f64, deal: &mut Box<dyn Shoe>) {
+        *self = Hand::new(bet_amount);
+
+        self.deal_card(deal);
+        if self.deal_card(deal) == 21 {
+            self.status = HandStatus::Blackjack;
+        }
+    }
+
+    fn split(&mut self, shoe: &mut Box<dyn Shoe>) -> (Hand, u8) {
         let mut new_hand = Hand {
             cards: vec![self.cards.pop().unwrap()],
             status: HandStatus::Value,
@@ -69,8 +70,8 @@ impl Hand {
         (new_hand, self.value)
     }
 
-    fn deal_card(&mut self, shoe: &mut Vec<u8>) -> u8 {
-        self.cards.push(shoe.pop().unwrap());
+    fn deal_card(&mut self, shoe: &mut Box<dyn Shoe>) -> u8 {
+        self.cards.push(shoe.deal());
 
         let aces = self.cards.iter().filter(|&n| *n == 1).count();
         self.value = self.cards.iter().sum::<u8>();
@@ -93,7 +94,7 @@ impl Hand {
 }
 
 pub struct Table {
-    shoe: Vec<u8>,
+    shoe: Box<dyn Shoe>,
     pub player: Vec<Hand>,
     pub dealer: Hand,
     pub status: RoundStatus,
@@ -101,13 +102,13 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn new(balance: f64) -> Table {
+    pub fn new(shoe: Box<dyn Shoe>) -> Table {
         Table {
-            shoe: Vec::new(),
+            shoe,
             player: vec![Hand::new(0.0)],
             dealer: Hand::new(0.0),
             status: RoundStatus::Concluded,
-            balance,
+            balance: 0.0,
         }
     }
 
@@ -167,12 +168,11 @@ impl Table {
             }
         } else {
             if let Action::Deal(bet_amount) = action {
+                self.shoe.on_new_round();
                 self.balance -= bet_amount;
-                if self.shoe.len() < 20 {
-                    self.shoe = create_shoe(4);
-                }
-                self.dealer = self.new_hand(0.0);
-                self.player = vec![self.new_hand(bet_amount)];
+                self.dealer.next_hand(0.0, &mut self.shoe);
+                self.player[0].next_hand(bet_amount, &mut self.shoe);
+                self.player.truncate(1);
 
                 self.player[0].status = match (&self.player[0].status, &self.dealer.status) {
                     (HandStatus::Blackjack, HandStatus::Blackjack) => {
@@ -195,17 +195,6 @@ impl Table {
                 Result::Err(())
             }
         }
-    }
-
-    fn new_hand(&mut self, bet_amount: f64) -> Hand {
-        let mut hand = Hand::new(bet_amount);
-
-        hand.deal_card(&mut self.shoe);
-        if hand.deal_card(&mut self.shoe) == 21 {
-            hand.status = HandStatus::Blackjack
-        }
-
-        hand
     }
 
     fn next_hand(&mut self) {

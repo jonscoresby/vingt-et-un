@@ -1,11 +1,40 @@
 use console::Term;
+use rand::seq::SliceRandom;
 use std::collections::HashMap;
-use vingt_et_un::{Action, Hand, HandStatus, RoundStatus, Table};
+use vingt_et_un::*;
+
+struct StandardShoe {
+    deck: Vec<u8>,
+    size: u8,
+}
+impl StandardShoe {
+    fn new(size: u8) -> StandardShoe {
+        let mut vec = Vec::new();
+        (0..size * 4).for_each(|_| {
+            vec.extend([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10]);
+        });
+        vec.shuffle(&mut rand::thread_rng());
+
+        StandardShoe { deck: vec, size }
+    }
+}
+impl Shoe for StandardShoe {
+    fn deal(&mut self) -> u8 {
+        self.deck.pop().unwrap()
+    }
+
+    fn on_new_round(&mut self) {
+        if self.deck.len() < 20 {
+            *self = StandardShoe::new(self.size);
+        }
+    }
+}
 
 fn main() {
     print_banner();
     let term = Term::stdout();
-    let mut game = Table::new(100.0);
+
+    let mut game = Table::new(Box::new(StandardShoe::new(4)));
     let mut possible_actions = HashMap::<char, Action>::new();
 
     loop {
