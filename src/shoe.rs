@@ -9,6 +9,7 @@ pub struct StandardShoe {
     deck: Vec<u8>,
     size: u8,
 }
+
 impl StandardShoe {
     pub fn new(size: u8) -> Box<StandardShoe> {
         Box::new(Self::create_shoe(size))
@@ -36,4 +37,3 @@ impl Shoe for StandardShoe {
         }
     }
 }
-

@@ -74,4 +74,3 @@ impl Hand {
         self.cards.len() == 2 && self.cards[0] == self.cards[1]
     }
 }
-

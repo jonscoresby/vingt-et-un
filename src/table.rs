@@ -1,9 +1,8 @@
-use Action::Hit;
 use crate::action::Action;
-use crate::Action::{Double, Split, Stand, Surrender};
 use crate::hand::{Hand, HandStatus};
-use crate::PossibleAction;
 use crate::shoe::Shoe;
+use crate::Action::{Double, Hit, Split, Stand, Surrender};
+use crate::PossibleAction;
 
 #[derive(PartialEq, Debug)]
 pub enum RoundStatus {
@@ -20,34 +19,15 @@ pub struct Table {
 }
 
 impl Table {
-    pub(crate) fn get_possible_actions(&self) -> Vec<&PossibleAction> {
-        let mut possible_actions: Vec<&PossibleAction> = Vec::new();
-        if self.can_take_basic_actions() {
-            possible_actions.push(&PossibleAction(Hit));
-            possible_actions.push(&PossibleAction(Stand));
-        }
-        if self.can_double() {
-            possible_actions.push(&PossibleAction(Double));
-        }
-        if self.can_split() {
-            possible_actions.push(&PossibleAction(Split));
-        }
-        if self.can_surrender() {
-            possible_actions.push(&PossibleAction(Surrender));
-        }
-
-        possible_actions
-    }
-}
-
-impl Table {
     pub(crate) fn take_action(&mut self, action: Action) {
-        if let RoundStatus::InProgress(active_hand_index) = self.status{
+        if let RoundStatus::InProgress(active_hand_index) = self.status {
             match action {
                 Stand => self.next_hand(),
-                Hit => if self.player[active_hand_index].deal_card(&mut self.shoe) >= 21 {
-                    self.next_hand();
-                },
+                Hit => {
+                    if self.player[active_hand_index].deal_card(&mut self.shoe) >= 21 {
+                        self.next_hand();
+                    }
+                }
                 Double => {
                     self.balance -= self.player[active_hand_index].bet_amount;
                     self.player[active_hand_index].bet_amount *= 2.0;
@@ -67,12 +47,11 @@ impl Table {
                     self.player[active_hand_index].status = HandStatus::Surrender;
                     self.next_hand();
                 }
-                _ => (),
             }
-            }
+        }
     }
 
-    pub(crate) fn start_round(&mut self, bet_amount: f64){
+    pub(crate) fn start_round(&mut self, bet_amount: f64) {
         self.shoe.on_new_round();
         self.balance -= bet_amount;
         self.dealer.next_hand(0.0, &mut self.shoe);
@@ -145,6 +124,25 @@ impl Table {
         }
     }
 
+    pub(crate) fn get_possible_actions(&self) -> Vec<PossibleAction> {
+        let mut possible_actions: Vec<PossibleAction> = Vec::new();
+        if self.can_take_basic_actions() {
+            possible_actions.push(PossibleAction(Hit));
+            possible_actions.push(PossibleAction(Stand));
+        }
+        if self.can_double() {
+            possible_actions.push(PossibleAction(Double));
+        }
+        if self.can_split() {
+            possible_actions.push(PossibleAction(Split));
+        }
+        if self.can_surrender() {
+            possible_actions.push(PossibleAction(Surrender));
+        }
+
+        possible_actions
+    }
+
     pub fn can_split(&self) -> bool {
         if let RoundStatus::InProgress(i) = self.status {
             self.player[i].can_split()
@@ -169,4 +167,3 @@ impl Table {
         !self.can_deal()
     }
 }
-

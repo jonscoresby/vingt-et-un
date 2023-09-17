@@ -1,17 +1,17 @@
 use console::Term;
 use std::collections::HashMap;
-use vingt_et_un::{Action, HandStatus, play, PossibleAction, RoundStatus, Table};
+use vingt_et_un::{play, Action, HandStatus, PossibleAction, RoundStatus, Table};
 
 fn main() {
     print_banner();
     play(get_action, get_bet);
 }
 
-fn get_action<'a>(game: &Table, possible: Vec<&'a PossibleAction>) -> &'a PossibleAction {
+fn get_action(game: &Table, possible: Vec<PossibleAction>) -> PossibleAction {
     print_game(game);
 
     let mut prompt = "Choose an action: ".to_owned();
-    let mut possible_actions = HashMap::<char, &PossibleAction>::new();
+    let mut possible_actions = HashMap::<char, PossibleAction>::new();
     for i in possible {
         match i.action() {
             Action::Hit => {
@@ -43,23 +43,23 @@ fn get_action<'a>(game: &Table, possible: Vec<&'a PossibleAction>) -> &'a Possib
     loop {
         match Term::stdout().read_char().unwrap() {
             'q' => std::process::exit(0),
-            c => match possible_actions.get(&c) {
+            c => match possible_actions.remove(&c) {
                 None => println!("Invalid action"),
-                Some(x) => break x
-            }
+                Some(x) => break x,
+            },
         }
     }
 }
 
 fn get_bet(game: &Table) -> f64 {
     print_game(game);
-    println!("Choose an action: (r)ebet, (n)ew bet");
+    println!("Choose an action: (r)ebet, (n)ew bet, (q)uit");
     loop {
         match Term::stdout().read_char().unwrap() {
             'q' => std::process::exit(0),
             'r' => break game.player[0].bet_amount,
             'n' => break get_bet_amount(),
-            _ => println!("Invalid action")
+            _ => println!("Invalid action"),
         }
     }
 }
