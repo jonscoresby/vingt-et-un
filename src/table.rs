@@ -126,44 +126,20 @@ impl Table {
 
     pub(crate) fn get_possible_actions(&self) -> Vec<PossibleAction> {
         let mut possible_actions: Vec<PossibleAction> = Vec::new();
-        if self.can_take_basic_actions() {
-            possible_actions.push(PossibleAction(Hit));
-            possible_actions.push(PossibleAction(Stand));
-        }
-        if self.can_double() {
-            possible_actions.push(PossibleAction(Double));
-        }
-        if self.can_split() {
-            possible_actions.push(PossibleAction(Split));
-        }
-        if self.can_surrender() {
-            possible_actions.push(PossibleAction(Surrender));
+
+        possible_actions.push(PossibleAction(Hit));
+        possible_actions.push(PossibleAction(Stand));
+        possible_actions.push(PossibleAction(Double));
+
+        if let RoundStatus::InProgress(i) = self.status {
+            if self.player[i].can_split() {
+                possible_actions.push(PossibleAction(Split));
+            }
+            if self.player.len() == 1 && self.player[i].cards.len() == 2 {
+                possible_actions.push(PossibleAction(Surrender));
+            }
         }
 
         possible_actions
-    }
-
-    pub fn can_split(&self) -> bool {
-        if let RoundStatus::InProgress(i) = self.status {
-            self.player[i].can_split()
-        } else {
-            false
-        }
-    }
-
-    pub fn can_surrender(&self) -> bool {
-        self.player.len() == 1 && self.player[0].cards.len() == 2 && self.can_take_basic_actions()
-    }
-
-    pub fn can_double(&self) -> bool {
-        self.can_take_basic_actions()
-    }
-
-    pub fn can_deal(&self) -> bool {
-        self.status == RoundStatus::Concluded
-    }
-
-    pub fn can_take_basic_actions(&self) -> bool {
-        !self.can_deal()
     }
 }
