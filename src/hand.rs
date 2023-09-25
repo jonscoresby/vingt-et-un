@@ -1,9 +1,13 @@
+use crate::shoe::Shoe;
+use crate::Action::{Double, Hit, Split, Stand, Surrender};
+use crate::HandStatus::Completed;
+use crate::{Action, PossibleAction};
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::shoe::Shoe;
 
 #[derive(PartialEq, PartialOrd, Copy, Clone)]
 pub enum HandStatus {
+    Completed,
     Value,
     Bust,
     Win,
@@ -13,9 +17,8 @@ pub enum HandStatus {
     Surrender,
 }
 
-pub trait PlayerTrait{
-    fn balance(&self) -> f64;
-    fn add_amount(&mut self, amount: f64);
+pub trait PlayerTrait {
+    fn balance(&mut self) -> &mut f64;
 }
 
 #[derive(PartialEq)]
@@ -25,41 +28,50 @@ pub struct Player {
 
 impl Player {
     pub fn new() -> Player {
-        Player{
-            balance: 0.0,
-        }
+        Player { balance: 0.0 }
     }
 }
 
-impl PlayerTrait for Player{
-    fn balance(&self) -> f64 {
-        self.balance
-    }
-    fn add_amount(&mut self, amount: f64) {
-        self.balance += amount;
+impl PlayerTrait for Player {
+    fn balance(&mut self) -> &mut f64 {
+        &mut self.balance
     }
 }
 
 pub struct Position<'a> {
     pub hand: Hand,
-    pub player: Rc<RefCell<&'a dyn PlayerTrait>>,
+    pub player: Rc<RefCell<&'a mut dyn PlayerTrait>>,
     pub bet_amount: f64,
 }
-impl Position<'_> {
-    //probably remove shoe from this function
-    pub fn new<'a>(shoe: &mut Box<dyn Shoe>, player: &'a dyn PlayerTrait, bet_amount: f64) -> Result<Position<'a>, ()>{
-        if player.balance() > bet_amount {
-            Ok(Position{
-                hand: Hand::new(shoe),
-                player: Rc::new(RefCell::new(player)),
-                bet_amount,
-            })
-        }else {
-            Err(())
-        }
+impl<'a> Position<'a> {
+    pub(crate) fn take_action(
+        &mut self,
+        action: Action,
+        shoe: &mut Box<dyn Shoe>,
+    ) -> Option<Position<'a>> {
+        match action {
+            Stand => self.hand.status = Completed,
+            Hit => {
+                self.hand.deal_card(shoe);
+            }
+            Double => {
+                *(&mut self.player.borrow_mut()).balance() -= self.bet_amount;
+                self.bet_amount *= 2.0;
+                self.hand.deal_card(shoe);
+            }
+            Split => {
+                *(&mut self.player.borrow_mut()).balance() -= self.bet_amount;
+                return Some(self.split(shoe));
+            }
+            Surrender => {
+                *(&mut self.player.borrow_mut()).balance() += self.bet_amount / 2.0;
+                self.hand.status = HandStatus::Surrender;
+            }
+        };
+        return None;
     }
 
-    pub(crate) fn split(&mut self, shoe: &mut Box<dyn Shoe>) -> Position {
+    pub(crate) fn split(&mut self, shoe: &mut Box<dyn Shoe>) -> Position<'a> {
         let mut new_hand = Position {
             hand: Hand {
                 cards: vec![self.hand.cards.pop().unwrap()],
@@ -68,11 +80,28 @@ impl Position<'_> {
                 soft: false,
             },
             bet_amount: self.bet_amount,
-            player: self.player.clone()
+            player: self.player.clone(),
         };
         self.hand.deal_card(shoe);
         new_hand.hand.deal_card(shoe);
         new_hand
+    }
+
+    pub(crate) fn get_possible_actions(&self) -> Vec<PossibleAction> {
+        let mut possible_actions: Vec<PossibleAction> = Vec::new();
+
+        possible_actions.push(PossibleAction(Hit));
+        possible_actions.push(PossibleAction(Stand));
+        possible_actions.push(PossibleAction(Double));
+
+        if self.hand.cards.len() == 2 && self.hand.cards[0] == self.hand.cards[1] {
+            possible_actions.push(PossibleAction(Split));
+        }
+        if Rc::strong_count(&self.player) == 1 && self.hand.cards.len() == 2 {
+            possible_actions.push(PossibleAction(Surrender));
+        }
+
+        possible_actions
     }
 }
 
@@ -116,16 +145,16 @@ impl Hand {
             self.status = HandStatus::Bust
         }
 
+        if self.value == 21 {
+            self.status = Completed
+        }
+
         self.value
     }
 
-    fn dealer_turn(&mut self, shoe: &mut Box<dyn Shoe>){
+    pub(crate) fn dealer_turn(&mut self, shoe: &mut Box<dyn Shoe>) {
         while self.value < 17 {
             self.deal_card(shoe);
         }
-    }
-
-    pub(crate) fn can_split(&self) -> bool {
-        self.cards.len() == 2 && self.cards[0] == self.cards[1]
     }
 }

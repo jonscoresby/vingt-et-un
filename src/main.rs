@@ -1,15 +1,21 @@
 use console::Term;
 use std::collections::HashMap;
-use vingt_et_un::{play, Action, HandStatus, PossibleAction, RoundStatus, Table};
-use vingt_et_un::table::Player;
+use vingt_et_un::hand::{Player, PlayerTrait, Position};
+use vingt_et_un::shoe::StandardShoe;
+use vingt_et_un::table::{Game, RoundStatus};
+use vingt_et_un::{Action, HandStatus, PossibleAction};
 
 fn main() {
     print_banner();
-    let player = Player::new();
-    play(get_action, get_bet);
+    let mut player= Player::new();
+    let mut game = Game::new(StandardShoe::new(4), get_action);
+    loop {
+        let bet = vec![get_bet(&mut game, &mut player as &mut dyn PlayerTrait)];
+        game.play_round(bet);
+    }
 }
 
-fn get_action(game: &Table, possible: Vec<PossibleAction>) -> PossibleAction {
+fn get_action(game: &Game, possible: Vec<PossibleAction>) -> PossibleAction {
     print_game(game);
 
     let mut prompt = "Choose an action: ".to_owned();
@@ -53,17 +59,18 @@ fn get_action(game: &Table, possible: Vec<PossibleAction>) -> PossibleAction {
     }
 }
 
-fn get_bet(game: &Table) -> f64 {
+fn get_bet<'a>(game: &mut Game, player: &'a mut (dyn PlayerTrait + 'a)) -> Position<'a> {
     print_game(game);
     println!("Choose an action: (r)ebet, (n)ew bet, (q)uit");
-    loop {
+    let bet_amount = loop {
         match Term::stdout().read_char().unwrap() {
             'q' => std::process::exit(0),
             'r' => break game.positions[0].bet_amount,
             'n' => break get_bet_amount(),
             _ => println!("Invalid action"),
         }
-    }
+    };
+    game.create_position(player, bet_amount).unwrap()
 }
 
 fn get_bet_amount() -> f64 {
@@ -77,24 +84,24 @@ fn get_bet_amount() -> f64 {
     }
 }
 
-fn print_game(game: &Table) {
+fn print_game(game: &Game) {
     Term::stdout().clear_screen().unwrap();
     println!();
     print!(" Dealer Hand: ");
     if let RoundStatus::InProgress(n) = game.status {
         println!("[?, {}]", game.dealer.cards[1]);
-        game.positions.iter().enumerate().for_each(|(i, hand)| {
+        game.positions.iter().enumerate().for_each(|(i, position)| {
             println!(
                 "{}Player Hand: {:?} {} {}   Bet: ${}",
                 if n == i { ">" } else { " " },
-                hand.cards,
-                if hand.soft {
-                    format!("{}/{}", hand.value - 10, hand.value)
+                position.hand.cards,
+                if position.hand.soft {
+                    format!("{}/{}", position.hand.value - 10, position.hand.value)
                 } else {
-                    hand.value.to_string()
+                    position.hand.value.to_string()
                 },
-                hand_message(hand.status),
-                hand.bet_amount,
+                hand_message(position.hand.status),
+                position.bet_amount,
             )
         });
     } else {
@@ -104,13 +111,13 @@ fn print_game(game: &Table) {
             game.dealer.value,
             hand_message(game.dealer.status)
         );
-        game.positions.iter().for_each(|hand| {
+        game.positions.iter().for_each(|position| {
             println!(
                 " Player Hand: {:?} {} {}  Bet: ${} ",
-                hand.cards,
-                hand.value,
-                hand_message(hand.status),
-                hand.bet_amount,
+                position.hand.cards,
+                position.hand.value,
+                hand_message(position.hand.status),
+                position.bet_amount,
             )
         });
     }
@@ -127,7 +134,7 @@ fn hand_message(status: HandStatus) -> &'static str {
         HandStatus::Blackjack => "Blackjack",
         HandStatus::Bust => "Bust",
         HandStatus::Surrender => "Surrender",
-        HandStatus::Value => "",
+        _ => "",
     }
 }
 

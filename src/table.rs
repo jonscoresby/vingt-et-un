@@ -1,128 +1,135 @@
-use crate::action::Action;
-use crate::hand::{Hand, HandStatus, Player, Position};
+use crate::hand::{Hand, HandStatus, PlayerTrait, Position};
 use crate::shoe::Shoe;
-use crate::Action::{Double, Hit, Split, Stand, Surrender};
+use crate::table::RoundStatus::InProgress;
+use crate::HandStatus::Completed;
 use crate::PossibleAction;
-use crate::RoundStatus::InProgress;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(PartialEq, Debug)]
 pub enum RoundStatus {
     Concluded,
     InProgress(usize),
 }
-pub struct Table<'a> {
-    pub(crate) shoe: &'a mut Box<dyn Shoe>,
+
+pub(crate) fn calculate_round_start(dealer: &Hand, positions: &mut Vec<Position>) {
+    for position in positions {
+        match (dealer.status, position.hand.status) {
+            (HandStatus::Blackjack, HandStatus::Blackjack) => {
+                *(&mut position.player.borrow_mut()).balance() += position.bet_amount;
+                position.hand.status = HandStatus::Push;
+            }
+            (HandStatus::Blackjack, _) => position.hand.status = HandStatus::Lose,
+            (_, HandStatus::Blackjack) => {
+                *(&mut position.player.borrow_mut()).balance() += position.bet_amount * 5.0 / 2.0
+            }
+            (_, _) => {}
+        }
+    }
+}
+
+pub struct Game<'a> {
+    shoe: Box<dyn Shoe>,
+    get_action: fn(&Game, Vec<PossibleAction>) -> PossibleAction,
     pub positions: Vec<Position<'a>>,
     pub dealer: Hand,
     pub status: RoundStatus,
 }
-
-impl<'a> Table<'a> {
-    pub(crate) fn take_action(active_position_index: usize, action: Action) {
-        let active_position = &mut self.positions[active_position_index];
-            match action {
-                Stand => self.status = InProgress(active_position_index + 1),
-                Hit => {active_position.hand.deal_card(&mut self.shoe);}
-                Double => {
-                    active_position.player.borrow_mut().add_amount(-active_position.bet_amount);
-                    active_position.bet_amount *= 2.0;
-                    active_position.hand.deal_card(&mut self.shoe);
-                }
-                Split => {
-                    active_position.player.borrow_mut().add_amount(-active_position.bet_amount);
-                    self.positions.insert(active_position_index + 1, active_position.split(&mut self.shoe));
-                }
-                Surrender => {
-                    active_position.player.borrow_mut().add_amount(active_position.bet_amount / 2.0);
-                    active_position.hand.status = HandStatus::Surrender;
-                }
-            }}
-
-    // this can be optimized
-    pub(crate) fn calculate_round_start(dealer: &Hand, positions: &mut Vec<Position>) {
-        if let HandStatus::Blackjack = dealer.status{
-            for mut position in positions {
-                if let HandStatus::Blackjack = position.hand.status{
-                    position.player.borrow_mut().add_amount(position.bet_amount);
-                    position.hand.status =HandStatus::Push;
-                }else {
-                    position.hand.status = HandStatus::Lose;
-                }
-            }
-        } else {
-            for hand in positions {
-                if let HandStatus::Blackjack = hand.hand.status{
-                    hand.player.borrow_mut().add_amount(hand.bet_amount * 5.0 / 2.0);
-                }
-            }
+impl<'a, 'b> Game<'a> {
+    pub fn new(
+        shoe: Box<dyn Shoe>,
+        get_action: fn(&Game, Vec<PossibleAction>) -> PossibleAction,
+    ) -> Game<'a> {
+        Game {
+            shoe,
+            get_action,
+            positions: vec![],
+            status: RoundStatus::Concluded,
+            dealer: Hand {
+                cards: vec![],
+                status: Completed,
+                value: 0,
+                soft: false,
+            },
         }
     }
 
-    fn play_round(shoe: &mut Box<dyn Shoe>, mut positions: Vec<Position>, get_action: fn(&Table, Vec<PossibleAction>) -> PossibleAction){
-        let dealer = Hand::new(shoe);
-        Self::calculate_round_start(&dealer, &mut positions);
-        let status = Self::update_round_status(&positions, 0);
+    pub fn create_position(
+        &mut self,
+        player: &'b mut dyn PlayerTrait,
+        bet_amount: f64,
+    ) -> Result<Position<'b>, ()> {
+        if *player.balance() > bet_amount {
+            Ok(Position {
+                hand: Hand::new(&mut self.shoe),
+                player: Rc::new(RefCell::new(player)),
+                bet_amount,
+            })
+        } else {
+            Err(())
+        }
+    }
+
+    pub fn play_round(&mut self, positions: Vec<Position<'a>>){
+        self.positions = positions;
+        self.dealer = Hand::new(&mut self.shoe);
+        calculate_round_start(&self.dealer, &mut self.positions);
+        self.status = update_round_status(&self.positions, 0);
 
         loop {
-            if let InProgress(x) = status {
-                Self::take_action(x, get_action(&round, round.get_possible_actions()).action());
-                Self::update_round_status(&round.positions, x);
-            } else {
-                if positions.iter().all(|position| position.hand.status == HandStatus::Bust || position.hand.status == HandStatus::Surrender) { break; }
-                round.dealer_turn();
-                break
-            }
-        }
-    }
-
-    fn update_round_status(positions: &Vec<Position>, i: usize) -> RoundStatus {
-        if i == positions.len() {
-            RoundStatus::Concluded
-        } else if positions[i].hand.value == 21 {
-            Self::update_round_status(positions, i + 1)
-        } else {
-            InProgress(i)
-        }
-    }
-
-    fn calculate_round_end(dealer: &Hand, positions: &mut Vec<Position>){
-        for posistion in positions {
-            if let HandStatus::Value = posistion.hand.status {
-                posistion.hand.status = if let HandStatus::Value = dealer.status {
-                    match posistion.hand.value.cmp(&dealer.value) {
-                        std::cmp::Ordering::Less => HandStatus::Lose,
-                        std::cmp::Ordering::Equal => HandStatus::Push,
-                        std::cmp::Ordering::Greater => HandStatus::Win,
-                    }
-                } else {
-                    HandStatus::Win
+            if let InProgress(active_position_index) = self.status {
+                let active_position = &mut self.positions[active_position_index];
+                let possible_actions = active_position.get_possible_actions();
+                let action = (self.get_action)(self, possible_actions).action();
+                if let Some(position) = self.positions[active_position_index].take_action(action, &mut self.shoe) {
+                    self.positions.insert(active_position_index + 1, position)
                 }
+                update_round_status(&self.positions, active_position_index);
+            } else {
+                break;
             }
-            posistion.player.borrow_mut().add_amount(match posistion.hand.status {
-                HandStatus::Win => posistion.bet_amount * 2.0,
-                HandStatus::Push => posistion.bet_amount,
-                _ => 0.0,
-            });
         }
+
+        if self.positions.iter().all(|position| {
+            position.hand.status == HandStatus::Bust
+                || position.hand.status == HandStatus::Surrender
+        }) {
+            return;
+        }
+        self.dealer.dealer_turn(&mut self.shoe);
+        calculate_round_end(&self.dealer, &mut self.positions);
     }
+}
+fn update_round_status(positions: &Vec<Position>, i: usize) -> RoundStatus {
+    if i == positions.len() {
+        RoundStatus::Concluded
+    } else if positions[i].hand.value == 21
+        || positions[i].hand.status == Completed
+        || positions[i].hand.status == HandStatus::Surrender
+    {
+        update_round_status(positions, i + 1)
+    } else {
+        InProgress(i)
+    }
+}
 
-    // move this to position and add bet amount validation
-    pub(crate) fn get_possible_actions(&self) -> Vec<PossibleAction> {
-        let mut possible_actions: Vec<PossibleAction> = Vec::new();
-
-        possible_actions.push(PossibleAction(Hit));
-        possible_actions.push(PossibleAction(Stand));
-        possible_actions.push(PossibleAction(Double));
-
-        if let InProgress(i) = self.status {
-            if self.positions[i].hand.can_split() {
-                possible_actions.push(PossibleAction(Split));
-            }
-            if self.positions.len() == 1 && self.positions[i].hand.cards.len() == 2 {
-                possible_actions.push(PossibleAction(Surrender));
+fn calculate_round_end(dealer: &Hand, positions: &mut Vec<Position>) {
+    for position in positions {
+        if let HandStatus::Value = position.hand.status {
+            position.hand.status = if let HandStatus::Value = dealer.status {
+                match position.hand.value.cmp(&dealer.value) {
+                    std::cmp::Ordering::Less => HandStatus::Lose,
+                    std::cmp::Ordering::Equal => HandStatus::Push,
+                    std::cmp::Ordering::Greater => HandStatus::Win,
+                }
+            } else {
+                HandStatus::Win
             }
         }
-
-        possible_actions
+        *(&mut position.player.borrow_mut()).balance() += match position.hand.status {
+            HandStatus::Win => position.bet_amount * 2.0,
+            HandStatus::Push => position.bet_amount,
+            _ => 0.0,
+        };
     }
 }
