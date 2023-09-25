@@ -7,25 +7,22 @@ pub use crate::action::{Action, PossibleAction};
 pub use crate::hand::{Hand, HandStatus};
 pub use crate::table::{RoundStatus, Table};
 use shoe::StandardShoe;
+use crate::hand::Player;
+use crate::shoe::Shoe;
 
 pub fn play(
     get_action: fn(&Table, Vec<PossibleAction>) -> PossibleAction,
-    get_bet: fn(&Table) -> f64,
+    get_bet: fn(Option<&Table>) -> f64,
 ) {
-    let mut table = Table {
-        shoe: StandardShoe::new(4),
-        player: vec![Hand::new(0.0)],
-        dealer: Hand::new(0.0),
-        status: RoundStatus::Concluded,
-        balance: 0.0,
-    };
-
+    let y = Player{ balance: 0.0 };
+    let mut shoe: Box<dyn Shoe> = StandardShoe::new(4);
+    let mut table = Table::calculate_round_start(&mut shoe, vec![Hand::new(get_bet(None), &y)], );
     loop {
-        if table.status == RoundStatus::Concluded {
-            table.start_round(get_bet(&table));
-        } else {
+        if let RoundStatus::InProgress(active_hand_index) = table.status {
             let other_possible = table.get_possible_actions();
-            table.take_action(get_action(&table, other_possible).0);
+            table.take_action(active_hand_index, get_action(&table, other_possible).0);
+        } else {
+            table = Table::calculate_round_start(&mut shoe, vec![Hand::new(get_bet(Option::from(&table)), &y)], get_action);
         }
     }
 }

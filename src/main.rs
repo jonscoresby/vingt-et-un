@@ -1,9 +1,11 @@
 use console::Term;
 use std::collections::HashMap;
 use vingt_et_un::{play, Action, HandStatus, PossibleAction, RoundStatus, Table};
+use vingt_et_un::table::Player;
 
 fn main() {
     print_banner();
+    let player = Player::new();
     play(get_action, get_bet);
 }
 
@@ -57,7 +59,7 @@ fn get_bet(game: &Table) -> f64 {
     loop {
         match Term::stdout().read_char().unwrap() {
             'q' => std::process::exit(0),
-            'r' => break game.player[0].bet_amount,
+            'r' => break game.positions[0].bet_amount,
             'n' => break get_bet_amount(),
             _ => println!("Invalid action"),
         }
@@ -81,7 +83,7 @@ fn print_game(game: &Table) {
     print!(" Dealer Hand: ");
     if let RoundStatus::InProgress(n) = game.status {
         println!("[?, {}]", game.dealer.cards[1]);
-        game.player.iter().enumerate().for_each(|(i, hand)| {
+        game.positions.iter().enumerate().for_each(|(i, hand)| {
             println!(
                 "{}Player Hand: {:?} {} {}   Bet: ${}",
                 if n == i { ">" } else { " " },
@@ -102,7 +104,7 @@ fn print_game(game: &Table) {
             game.dealer.value,
             hand_message(game.dealer.status)
         );
-        game.player.iter().for_each(|hand| {
+        game.positions.iter().for_each(|hand| {
             println!(
                 " Player Hand: {:?} {} {}  Bet: ${} ",
                 hand.cards,
@@ -113,7 +115,7 @@ fn print_game(game: &Table) {
         });
     }
 
-    println!("Current Balance: {}", game.balance);
+    println!("Current Balance: {}", 0);
     println!();
 }
 
