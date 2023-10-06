@@ -1,16 +1,15 @@
 use console::Term;
 use std::collections::HashMap;
-use vingt_et_un::hand::{Player, PlayerTrait, Position};
 use vingt_et_un::shoe::StandardShoe;
 use vingt_et_un::table::{Game, RoundStatus};
 use vingt_et_un::{Action, HandStatus, PossibleAction};
+use vingt_et_un::position::Position;
 
 fn main() {
     print_banner();
-    let mut player= Player::new();
     let mut game = Game::new(StandardShoe::new(4), get_action);
     loop {
-        let bet = vec![get_bet(&mut game, &mut player as &mut dyn PlayerTrait)];
+        let bet = vec![get_bet(&mut game)];
         game.play_round(bet);
     }
 }
@@ -59,7 +58,7 @@ fn get_action(game: &Game, possible: Vec<PossibleAction>) -> PossibleAction {
     }
 }
 
-fn get_bet<'a>(game: &mut Game, player: &'a mut (dyn PlayerTrait + 'a)) -> Position<'a> {
+fn get_bet(game: &mut Game) -> Position {
     print_game(game);
     println!("Choose an action: (r)ebet, (n)ew bet, (q)uit");
     let bet_amount = loop {
@@ -70,7 +69,7 @@ fn get_bet<'a>(game: &mut Game, player: &'a mut (dyn PlayerTrait + 'a)) -> Posit
             _ => println!("Invalid action"),
         }
     };
-    game.create_position(player, bet_amount).unwrap()
+    game.create_position(100.0, bet_amount).unwrap()
 }
 
 fn get_bet_amount() -> f64 {

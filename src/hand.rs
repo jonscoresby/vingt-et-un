@@ -1,13 +1,7 @@
 use crate::shoe::Shoe;
-use crate::Action::{Double, Hit, Split, Stand, Surrender};
-use crate::HandStatus::Completed;
-use crate::{Action, PossibleAction};
-use std::cell::RefCell;
-use std::rc::Rc;
 
-#[derive(PartialEq, PartialOrd, Copy, Clone)]
+#[derive(PartialEq, PartialOrd, Copy, Clone, Debug)]
 pub enum HandStatus {
-    Completed,
     Value,
     Bust,
     Win,
@@ -15,97 +9,10 @@ pub enum HandStatus {
     Lose,
     Blackjack,
     Surrender,
+    Completed,
 }
 
-pub trait PlayerTrait {
-    fn balance(&mut self) -> &mut f64;
-}
-
-#[derive(PartialEq)]
-pub struct Player {
-    balance: f64,
-}
-
-impl Player {
-    pub fn new() -> Player {
-        Player { balance: 0.0 }
-    }
-}
-
-impl PlayerTrait for Player {
-    fn balance(&mut self) -> &mut f64 {
-        &mut self.balance
-    }
-}
-
-pub struct Position<'a> {
-    pub hand: Hand,
-    pub player: Rc<RefCell<&'a mut dyn PlayerTrait>>,
-    pub bet_amount: f64,
-}
-impl<'a> Position<'a> {
-    pub(crate) fn take_action(
-        &mut self,
-        action: Action,
-        shoe: &mut Box<dyn Shoe>,
-    ) -> Option<Position<'a>> {
-        match action {
-            Stand => self.hand.status = Completed,
-            Hit => {
-                self.hand.deal_card(shoe);
-            }
-            Double => {
-                *(&mut self.player.borrow_mut()).balance() -= self.bet_amount;
-                self.bet_amount *= 2.0;
-                self.hand.deal_card(shoe);
-            }
-            Split => {
-                *(&mut self.player.borrow_mut()).balance() -= self.bet_amount;
-                return Some(self.split(shoe));
-            }
-            Surrender => {
-                *(&mut self.player.borrow_mut()).balance() += self.bet_amount / 2.0;
-                self.hand.status = HandStatus::Surrender;
-            }
-        };
-        return None;
-    }
-
-    pub(crate) fn split(&mut self, shoe: &mut Box<dyn Shoe>) -> Position<'a> {
-        let mut new_hand = Position {
-            hand: Hand {
-                cards: vec![self.hand.cards.pop().unwrap()],
-                status: HandStatus::Value,
-                value: 0,
-                soft: false,
-            },
-            bet_amount: self.bet_amount,
-            player: self.player.clone(),
-        };
-        self.hand.deal_card(shoe);
-        new_hand.hand.deal_card(shoe);
-        new_hand
-    }
-
-    pub(crate) fn get_possible_actions(&self) -> Vec<PossibleAction> {
-        let mut possible_actions: Vec<PossibleAction> = Vec::new();
-
-        possible_actions.push(PossibleAction(Hit));
-        possible_actions.push(PossibleAction(Stand));
-        possible_actions.push(PossibleAction(Double));
-
-        if self.hand.cards.len() == 2 && self.hand.cards[0] == self.hand.cards[1] {
-            possible_actions.push(PossibleAction(Split));
-        }
-        if Rc::strong_count(&self.player) == 1 && self.hand.cards.len() == 2 {
-            possible_actions.push(PossibleAction(Surrender));
-        }
-
-        possible_actions
-    }
-}
-
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub struct Hand {
     pub cards: Vec<u8>,
     pub status: HandStatus,
@@ -146,7 +53,7 @@ impl Hand {
         }
 
         if self.value == 21 {
-            self.status = Completed
+            self.status = HandStatus::Completed
         }
 
         self.value
@@ -156,5 +63,70 @@ impl Hand {
         while self.value < 17 {
             self.deal_card(shoe);
         }
+    }
+}
+
+#[cfg(test)]
+mod hand_tests {
+    use super::*;
+    use crate::shoe::CustomShoe;
+
+    #[test]
+    fn hand_value_calculation(){
+        let mut shoe = CustomShoe::new(vec![7, 7, 7, 7]);
+
+        let mut hand = Hand{
+            cards: vec![],
+            status: HandStatus::Value,
+            value: 0,
+            soft: false,
+        };
+
+        assert_eq!(hand.deal_card(&mut shoe), 7);
+        assert_eq!(hand.status, HandStatus::Value);
+
+        assert_eq!(hand.deal_card(&mut shoe), 14);
+        assert_eq!(hand.status, HandStatus::Value);
+
+        assert_eq!(hand.deal_card(&mut shoe), 21);
+        assert_eq!(hand.status, HandStatus::Completed);
+
+        assert_eq!(hand.deal_card(&mut shoe), 28);
+        assert_eq!(hand.status, HandStatus::Bust);
+    }
+
+    #[test]
+    fn soft_hand_value_calculation(){
+        let mut shoe = CustomShoe::new(vec![1, 9, 1, 1, 7]);
+
+        let mut hand = Hand{
+            cards: vec![],
+            status: HandStatus::Value,
+            value: 0,
+            soft: false,
+        };
+
+        assert_eq!(hand.deal_card(&mut shoe), 7);
+        assert!(!hand.soft);
+
+        assert_eq!(hand.deal_card(&mut shoe), 18);
+        assert!(hand.soft);
+
+        assert_eq!(hand.deal_card(&mut shoe), 19);
+        assert!(hand.soft);
+
+        assert_eq!(hand.deal_card(&mut shoe), 18);
+        assert!(!hand.soft);
+
+        assert_eq!(hand.deal_card(&mut shoe), 19);
+        assert!(!hand.soft);
+    }
+
+    #[test]
+    fn new_hand_blackjack(){
+        let mut shoe = CustomShoe::new(vec![10, 1]);
+
+        let hand = Hand::new(&mut shoe);
+        assert_eq!(hand.status, HandStatus::Blackjack);
     }
 }

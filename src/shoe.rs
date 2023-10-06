@@ -28,12 +28,55 @@ impl StandardShoe {
 
 impl Shoe for StandardShoe {
     fn deal(&mut self) -> u8 {
-        self.deck.pop().unwrap()
+        match self.deck.pop(){
+            None => {
+                self.on_new_round();
+                self.deal()
+            },
+            Some(x) => x
+        }
     }
 
     fn on_new_round(&mut self) {
         if self.deck.len() < 20 {
             *self = Self::create_shoe(self.size);
         }
+    }
+}
+
+pub(crate) struct CustomShoe{
+    pub(crate) deck: Vec<u8>
+}
+
+impl CustomShoe {
+    pub(crate) fn new(deck: Vec<u8>) -> Box<dyn Shoe>{
+        Box::new(CustomShoe{
+            deck
+        })
+    }
+}
+
+impl Shoe for CustomShoe{
+    fn deal(&mut self) -> u8 {
+        self.deck.pop().unwrap()
+    }
+}
+
+#[cfg(test)]
+mod shoe_tests {
+    use super::*;
+
+    #[test]
+    fn standard_shoe_creation() {
+        let shoe = StandardShoe::new(8);
+        assert_eq!(shoe.deck.iter().filter(|x| **x == 10).count(), 128);
+        assert_eq!(shoe.deck.iter().filter(|x| **x == 3).count(), 32);
+    }
+
+    #[test]
+    fn standard_shoe_no_cards() {
+        let mut shoe = StandardShoe::new(1);
+        shoe.deck.clear();
+        shoe.deal();
     }
 }
