@@ -1,9 +1,10 @@
 use console::Term;
 use std::collections::HashMap;
-use vingt_et_un::shoe::StandardShoe;
-use vingt_et_un::table::{Game, RoundStatus};
-use vingt_et_un::{Action, HandStatus, PossibleAction};
 use vingt_et_un::position::Position;
+use vingt_et_un::shoe::StandardShoe;
+use vingt_et_un::table::{Game, };
+use vingt_et_un::{Action, HandStatus, PossibleAction};
+use vingt_et_un::round::Round;
 
 fn main() {
     print_banner();
@@ -14,7 +15,7 @@ fn main() {
     }
 }
 
-fn get_action(game: &Game, possible: Vec<PossibleAction>) -> PossibleAction {
+fn get_action(game: &Round, possible: Vec<PossibleAction>) -> PossibleAction {
     print_game(game);
 
     let mut prompt = "Choose an action: ".to_owned();
@@ -83,11 +84,11 @@ fn get_bet_amount() -> f64 {
     }
 }
 
-fn print_game(game: &Game) {
+fn print_game(game: &Round) {
     Term::stdout().clear_screen().unwrap();
     println!();
     print!(" Dealer Hand: ");
-    if let RoundStatus::InProgress(n) = game.status {
+    if let RoundStatus::InProgress(n) = game.active_position_index {
         println!("[?, {}]", game.dealer.cards[1]);
         game.positions.iter().enumerate().for_each(|(i, position)| {
             println!(

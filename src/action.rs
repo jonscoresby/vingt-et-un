@@ -16,7 +16,7 @@ impl PossibleAction {
     }
 }
 
-impl PartialEq for PossibleAction{
+impl PartialEq for PossibleAction {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }

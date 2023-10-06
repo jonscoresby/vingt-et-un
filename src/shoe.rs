@@ -28,12 +28,12 @@ impl StandardShoe {
 
 impl Shoe for StandardShoe {
     fn deal(&mut self) -> u8 {
-        match self.deck.pop(){
+        match self.deck.pop() {
             None => {
                 self.on_new_round();
                 self.deal()
-            },
-            Some(x) => x
+            }
+            Some(x) => x,
         }
     }
 
@@ -44,19 +44,17 @@ impl Shoe for StandardShoe {
     }
 }
 
-pub(crate) struct CustomShoe{
-    pub(crate) deck: Vec<u8>
+pub(crate) struct CustomShoe {
+    pub(crate) deck: Vec<u8>,
 }
 
 impl CustomShoe {
-    pub(crate) fn new(deck: Vec<u8>) -> Box<dyn Shoe>{
-        Box::new(CustomShoe{
-            deck
-        })
+    pub(crate) fn new(deck: Vec<u8>) -> Box<dyn Shoe> {
+        Box::new(CustomShoe { deck })
     }
 }
 
-impl Shoe for CustomShoe{
+impl Shoe for CustomShoe {
     fn deal(&mut self) -> u8 {
         self.deck.pop().unwrap()
     }

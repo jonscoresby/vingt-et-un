@@ -9,7 +9,7 @@ pub enum HandStatus {
     Lose,
     Blackjack,
     Surrender,
-    Completed,
+    Stood,
 }
 
 #[derive(PartialEq, Debug)]
@@ -53,7 +53,7 @@ impl Hand {
         }
 
         if self.value == 21 {
-            self.status = HandStatus::Completed
+            self.status = HandStatus::Stood
         }
 
         self.value
@@ -72,10 +72,10 @@ mod hand_tests {
     use crate::shoe::CustomShoe;
 
     #[test]
-    fn hand_value_calculation(){
+    fn hand_value_calculation() {
         let mut shoe = CustomShoe::new(vec![7, 7, 7, 7]);
 
-        let mut hand = Hand{
+        let mut hand = Hand {
             cards: vec![],
             status: HandStatus::Value,
             value: 0,
@@ -89,17 +89,17 @@ mod hand_tests {
         assert_eq!(hand.status, HandStatus::Value);
 
         assert_eq!(hand.deal_card(&mut shoe), 21);
-        assert_eq!(hand.status, HandStatus::Completed);
+        assert_eq!(hand.status, HandStatus::Stood);
 
         assert_eq!(hand.deal_card(&mut shoe), 28);
         assert_eq!(hand.status, HandStatus::Bust);
     }
 
     #[test]
-    fn soft_hand_value_calculation(){
+    fn soft_hand_value_calculation() {
         let mut shoe = CustomShoe::new(vec![1, 9, 1, 1, 7]);
 
-        let mut hand = Hand{
+        let mut hand = Hand {
             cards: vec![],
             status: HandStatus::Value,
             value: 0,
@@ -123,7 +123,7 @@ mod hand_tests {
     }
 
     #[test]
-    fn new_hand_blackjack(){
+    fn new_hand_blackjack() {
         let mut shoe = CustomShoe::new(vec![10, 1]);
 
         let hand = Hand::new(&mut shoe);
