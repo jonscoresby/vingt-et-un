@@ -1,6 +1,5 @@
 use console::Term;
 use std::collections::HashMap;
-use vingt_et_un::position::Position;
 use vingt_et_un::shoe::StandardShoe;
 use vingt_et_un::table::{Game, };
 use vingt_et_un::{Action, HandStatus, PossibleAction};
@@ -8,11 +7,29 @@ use vingt_et_un::round::Round;
 
 fn main() {
     print_banner();
-    let mut game = Game::new(StandardShoe::new(4), get_action);
-    loop {
-        let bet = vec![get_bet(&mut game)];
-        game.play_round(bet);
+    Game::start_game(StandardShoe::new(4), new_round, get_action);
+}
+
+fn new_round(game: &mut Game, last_round: &Round){
+    if game.get_player_balances().is_empty() {
+        // update_player_balance returns an error if balance is negative. this
+        // hardcoded value is positive, so unwrap is safe
+        game.update_player_balances(vec![100.0]).unwrap();
+    }else {
+        print_game(last_round)
     }
+
+    println!("Choose an action: (r)ebet, (n)ew bet, (q)uit");
+    let bet_amount = loop {
+        match Term::stdout().read_char().unwrap() {
+            'q' => std::process::exit(0),
+            'r' => break last_round.player_hands[0].bet_amount,
+            'n' => break get_bet_amount(),
+            _ => println!("Invalid action"),
+        }
+    };
+
+    game.set_bet(0, bet_amount);
 }
 
 fn get_action(game: &Round, possible: Vec<PossibleAction>) -> PossibleAction {
@@ -59,20 +76,6 @@ fn get_action(game: &Round, possible: Vec<PossibleAction>) -> PossibleAction {
     }
 }
 
-fn get_bet(game: &mut Game) -> Position {
-    print_game(game);
-    println!("Choose an action: (r)ebet, (n)ew bet, (q)uit");
-    let bet_amount = loop {
-        match Term::stdout().read_char().unwrap() {
-            'q' => std::process::exit(0),
-            'r' => break game.positions[0].bet_amount,
-            'n' => break get_bet_amount(),
-            _ => println!("Invalid action"),
-        }
-    };
-    game.create_position(100.0, bet_amount).unwrap()
-}
-
 fn get_bet_amount() -> f64 {
     println!("Enter a new bet amount:");
     loop {
@@ -84,16 +87,16 @@ fn get_bet_amount() -> f64 {
     }
 }
 
-fn print_game(game: &Round) {
+fn print_game(round: &Round) {
     Term::stdout().clear_screen().unwrap();
     println!();
     print!(" Dealer Hand: ");
-    if let RoundStatus::InProgress(n) = game.active_position_index {
-        println!("[?, {}]", game.dealer.cards[1]);
-        game.positions.iter().enumerate().for_each(|(i, position)| {
+    if round.active_hand_index != round.player_hands.len() {
+        println!("[?, {}]", round.dealer.cards[1]);
+        round.player_hands.iter().enumerate().for_each(|(i, position)| {
             println!(
                 "{}Player Hand: {:?} {} {}   Bet: ${}",
-                if n == i { ">" } else { " " },
+                if round.active_hand_index == i { ">" } else { " " },
                 position.hand.cards,
                 if position.hand.soft {
                     format!("{}/{}", position.hand.value - 10, position.hand.value)
@@ -107,11 +110,11 @@ fn print_game(game: &Round) {
     } else {
         println!(
             "{:?} {} {}",
-            game.dealer.cards,
-            game.dealer.value,
-            hand_message(game.dealer.status)
+            round.dealer.cards,
+            round.dealer.value,
+            hand_message(round.dealer.status)
         );
-        game.positions.iter().for_each(|position| {
+        round.player_hands.iter().for_each(|position| {
             println!(
                 " Player Hand: {:?} {} {}  Bet: ${} ",
                 position.hand.cards,
@@ -122,7 +125,7 @@ fn print_game(game: &Round) {
         });
     }
 
-    println!("Current Balance: {}", 0);
+    println!("Current Balance: {}", round.player_hands[0].balance());
     println!();
 }
 

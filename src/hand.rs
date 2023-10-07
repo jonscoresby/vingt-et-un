@@ -30,16 +30,17 @@ impl Hand {
         };
 
         hand.deal_card(shoe);
-        if hand.deal_card(shoe) == 21 {
-            hand.status = HandStatus::Blackjack;
-        };
-
+        hand.deal_card(shoe);
         hand
     }
 
     pub(crate) fn deal_card(&mut self, shoe: &mut Box<dyn Shoe>) -> u8 {
         self.cards.push(shoe.deal());
+        self.calculate_value();
+        self.value
+    }
 
+    pub(crate) fn calculate_value(&mut self){
         let aces = self.cards.iter().filter(|&n| *n == 1).count();
         self.value = self.cards.iter().sum::<u8>();
 
@@ -53,10 +54,12 @@ impl Hand {
         }
 
         if self.value == 21 {
-            self.status = HandStatus::Stood
-        }
+            self.status = HandStatus::Blackjack;
 
-        self.value
+            if self.cards.len() > 2 {
+                self.status = HandStatus::Stood
+            }
+        }
     }
 
     pub(crate) fn dealer_turn(&mut self, shoe: &mut Box<dyn Shoe>) {
@@ -128,5 +131,13 @@ mod hand_tests {
 
         let hand = Hand::new(&mut shoe);
         assert_eq!(hand.status, HandStatus::Blackjack);
+    }
+    #[test]
+    fn hand_hit_twenty_one() {
+        let mut shoe = CustomShoe::new(vec![8, 8, 5]);
+
+        let mut hand = Hand::new(&mut shoe);
+        hand.deal_card(&mut shoe);
+        assert_eq!(hand.status, HandStatus::Stood);
     }
 }

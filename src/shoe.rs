@@ -2,7 +2,7 @@ use rand::seq::SliceRandom;
 
 pub trait Shoe {
     fn deal(&mut self) -> u8;
-    fn on_new_round(&mut self) {}
+    fn new_round(&mut self) {}
 }
 
 pub struct StandardShoe {
@@ -30,14 +30,14 @@ impl Shoe for StandardShoe {
     fn deal(&mut self) -> u8 {
         match self.deck.pop() {
             None => {
-                self.on_new_round();
+                self.new_round();
                 self.deal()
             }
             Some(x) => x,
         }
     }
 
-    fn on_new_round(&mut self) {
+    fn new_round(&mut self) {
         if self.deck.len() < 20 {
             *self = Self::create_shoe(self.size);
         }

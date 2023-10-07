@@ -1,12 +1,12 @@
 use crate::hand::{Hand};
-use crate::position::Position;
+use crate::player_hand::PlayerHand;
 use crate::round::Round;
 use crate::shoe::Shoe;
 use crate::table::PlayerBalanceError::{BalanceCannotBeNegative, PlayerDoesNotExist};
 use crate::PossibleAction;
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::HandStatus::Stood;
+use crate::HandStatus::{Stood, Value};
 
 #[derive(Debug)]
 pub enum PlayerBalanceError {
@@ -17,37 +17,46 @@ pub enum PlayerBalanceError {
 pub struct Game {
     shoe: Box<dyn Shoe>,
     get_action: fn(&Round, Vec<PossibleAction>) -> PossibleAction,
-    balances: Vec<Rc<RefCell<f64>>>,
+    player_balances: Vec<Rc<RefCell<f64>>>,
+    player_bets: Vec<Vec<f64>>
 }
 
 impl Game {
-    pub fn new(
-        shoe: Box<dyn Shoe>,
-        get_action: fn(&Round, Vec<PossibleAction>) -> PossibleAction,
-        player_balances: Vec<f64>,
-    ) -> Game {
-        Game {
+    pub fn start_game(shoe: Box<dyn Shoe>, new_round: fn(&mut Game, &Round), get_action: fn(&Round, Vec<PossibleAction>) -> PossibleAction) {
+        let mut game = Game {
             shoe,
             get_action,
-            balances: player_balances
-                .iter()
-                .map(|x| Rc::from(RefCell::from(*x)))
-                .collect(),
-        }
+            player_balances: vec![],
+            player_bets: vec![]
+        };
+
+        let mut round = Round{
+            player_hands: vec![],
+            active_hand_index: 0,
+            dealer: Hand{
+                cards: vec![],
+                status: Value,
+                value: 0,
+                soft: false,
+            },
+        };
+
+       loop {
+           new_round(&mut game, &round);
+           round = game.play_round();
+           game.shoe.new_round()
+       }
     }
 
     pub fn get_player_balances(&self) -> Vec<f64> {
-        self.balances.iter().map(|x| *x.borrow()).collect()
+        self.player_balances.iter().map(|x| *x.borrow()).collect()
     }
 
-    pub fn update_player_balances(
-        &mut self,
-        player_balances: Vec<f64>,
-    ) -> Result<(), PlayerBalanceError> {
+    pub fn update_player_balances(&mut self, player_balances: Vec<f64>) -> Result<(), PlayerBalanceError> {
         if player_balances.iter().any(|x| *x < 0.0) {
             Err(BalanceCannotBeNegative)
         } else {
-            self.balances = player_balances
+            self.player_balances = player_balances
                 .iter()
                 .map(|x| Rc::from(RefCell::from(*x)))
                 .collect();
@@ -56,7 +65,7 @@ impl Game {
     }
 
     pub fn get_player_balance(&self, player_index: usize) -> Result<f64, PlayerBalanceError> {
-        match self.balances.get(player_index) {
+        match self.player_balances.get(player_index) {
             None => Err(PlayerDoesNotExist),
             Some(x) => Ok(*x.borrow()),
         }
@@ -67,7 +76,7 @@ impl Game {
         player_index: usize,
         new_balance: f64,
     ) -> Result<(), PlayerBalanceError> {
-        match self.balances.get(player_index) {
+        match self.player_balances.get(player_index) {
             None => Err(PlayerDoesNotExist),
             Some(x) => {
                 if new_balance < 0.0 {
@@ -85,7 +94,7 @@ impl Game {
         player_index: usize,
         new_balance: f64,
     ) -> Result<(), PlayerBalanceError> {
-        match self.balances.get(player_index) {
+        match self.player_balances.get(player_index) {
             None => Err(PlayerDoesNotExist),
             Some(x) => {
                 if -new_balance > *x.borrow() {
@@ -98,49 +107,51 @@ impl Game {
         }
     }
 
-    pub fn create_position(
-        &mut self,
-        player_index: usize,
-        bet_amount: f64,
-    ) -> Result<Position, PlayerBalanceError> {
-        let balance = match self.balances.get(player_index) {
-            None => return Err(PlayerDoesNotExist),
-            Some(x) => x,
-        };
-
-        if *balance.borrow() < bet_amount {
-            return Err(BalanceCannotBeNegative);
+    fn create_player_hands(&mut self) -> Vec<PlayerHand> {
+        let mut player_hands = Vec::<PlayerHand>::new();
+        for (i, x) in self.player_bets.iter().enumerate(){
+            for y in x {
+                player_hands.push(
+                PlayerHand {
+                    hand: Hand::new(&mut self.shoe),
+                    player_balance: self.player_balances[i].clone(),
+                    bet_amount: *y,
+                    split: false,
+                })
+            }
         }
-
-        Ok(Position {
-            hand: Hand::new(&mut self.shoe),
-            player: balance.clone(),
-            bet_amount,
-            can_surrender: true,
-        })
+        player_hands
     }
 
-    pub fn play_round(&mut self, positions: Vec<Position>) -> Round {
+    pub fn set_bet(&mut self, player_balance_index: usize, amount: f64){
+        if self.player_bets.is_empty() {
+            self.player_bets.push(vec![amount])
+        }else {
+            self.player_bets[player_balance_index][0] = amount;
+        }
+    }
+
+    fn play_round(&mut self) -> Round {
         let mut round = Round {
-            positions,
+            player_hands: self.create_player_hands(),
             dealer: Hand::new(&mut self.shoe),
-            active_position_index: 0,
+            active_hand_index: 0,
         };
 
-        round.calculate_round_start();
+        round.start();
 
-        while round.update_round_status() {
-            let active_position = &mut round.positions[round.active_position_index];
-            let possible_actions = active_position.get_possible_actions();
+        while round.update_active_hand_index() {
+            let active_player_hand = &mut round.player_hands[round.active_hand_index];
+            let possible_actions = active_player_hand.get_possible_actions();
             let action = (self.get_action)(&round, possible_actions).action();
-            if let Some(position) = round.positions[round.active_position_index].take_action(action, &mut self.shoe) {
-                round.positions.insert(round.active_position_index + 1, position)
+            if let Some(player_hand) = round.player_hands[round.active_hand_index].take_action(action, &mut self.shoe) {
+                round.player_hands.insert(round.active_hand_index + 1, player_hand)
             }
         }
 
-        if round.positions.iter().any(|position| position.hand.status == Stood) {
+        if round.player_hands.iter().any(|player_hand| player_hand.hand.status == Stood) {
             round.dealer.dealer_turn(&mut self.shoe);
-            round.calculate_round_end();
+            round.end();
         }
 
         round

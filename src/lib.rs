@@ -1,6 +1,6 @@
 pub mod action;
 pub mod hand;
-pub mod position;
+pub mod player_hand;
 pub mod round;
 pub mod shoe;
 pub mod table;
