@@ -1,9 +1,9 @@
 use crate::shoe::Shoe;
 use crate::Action::{Double, Hit, Split, Stand, Surrender};
+use crate::HandStatus::Stood;
 use crate::{Action, Hand, HandStatus, PossibleAction};
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::HandStatus::Stood;
 
 #[derive(Debug)]
 pub struct PlayerHand {
@@ -87,17 +87,16 @@ impl PlayerHand {
     pub fn balance(&self) -> f64 {
         *self.player_balance.borrow()
     }
-
 }
 
 #[cfg(test)]
 mod player_hand_tests {
     use crate::player_hand::PlayerHand;
     use crate::shoe::{CustomShoe, Shoe, StandardShoe};
+    use crate::Action::{Double, Split, Surrender};
     use crate::{Hand, PossibleAction};
     use std::cell::RefCell;
     use std::rc::Rc;
-    use crate::Action::{Double, Split, Surrender};
 
     fn test_player_hand(shoe: &mut Box<dyn Shoe>, bet_amount: f64) -> PlayerHand {
         let balance = Rc::from(RefCell::from(100.00));
@@ -105,7 +104,7 @@ mod player_hand_tests {
             hand: Hand::new(shoe),
             player_balance: balance.clone(),
             bet_amount,
-            split: false
+            split: false,
         }
     }
 
@@ -114,10 +113,14 @@ mod player_hand_tests {
         let mut shoe: Box<dyn Shoe> = StandardShoe::new(1);
 
         let mut player_hand = test_player_hand(&mut shoe, 60.0);
-        assert!(player_hand.get_possible_actions().contains(&PossibleAction(Double)));
+        assert!(player_hand
+            .get_possible_actions()
+            .contains(&PossibleAction(Double)));
 
         player_hand.double(&mut shoe);
-        assert!(!player_hand.get_possible_actions().contains(&PossibleAction(Double)));
+        assert!(!player_hand
+            .get_possible_actions()
+            .contains(&PossibleAction(Double)));
     }
 
     #[test]
@@ -125,26 +128,44 @@ mod player_hand_tests {
         let mut shoe: Box<dyn Shoe> = StandardShoe::new(1);
 
         let mut player_hand = test_player_hand(&mut shoe, 0.0);
-        assert!(player_hand.get_possible_actions().contains(&PossibleAction(Surrender)));
+        assert!(player_hand
+            .get_possible_actions()
+            .contains(&PossibleAction(Surrender)));
 
         let player_hand2 = player_hand.split(&mut shoe);
-        assert!(!player_hand.get_possible_actions().contains(&PossibleAction(Surrender)));
-        assert!(!player_hand2.get_possible_actions().contains(&PossibleAction(Surrender)));
+        assert!(!player_hand
+            .get_possible_actions()
+            .contains(&PossibleAction(Surrender)));
+        assert!(!player_hand2
+            .get_possible_actions()
+            .contains(&PossibleAction(Surrender)));
     }
 
     #[test]
     fn split_possible_action() {
-        let mut shoe = CustomShoe::new(vec![2, 2, 8, 8, 8, 8]);
+        let mut shoe: Box<dyn Shoe> = CustomShoe::new(vec![2, 2, 8, 8, 8, 8]);
         let mut player_hand = test_player_hand(&mut shoe, 40.0);
-        assert!(player_hand.get_possible_actions().contains(&PossibleAction(Split)));
+        assert!(player_hand
+            .get_possible_actions()
+            .contains(&PossibleAction(Split)));
 
         let player_hand2 = player_hand.split(&mut shoe);
-        assert!(player_hand.get_possible_actions().contains(&PossibleAction(Split)));
-        assert!(player_hand2.get_possible_actions().contains(&PossibleAction(Split)));
+        assert!(player_hand
+            .get_possible_actions()
+            .contains(&PossibleAction(Split)));
+        assert!(player_hand2
+            .get_possible_actions()
+            .contains(&PossibleAction(Split)));
 
         let player_hand3 = player_hand.split(&mut shoe);
-        assert!(!player_hand.get_possible_actions().contains(&PossibleAction(Split)));
-        assert!(!player_hand2.get_possible_actions().contains(&PossibleAction(Split)));
-        assert!(!player_hand3.get_possible_actions().contains(&PossibleAction(Split)));
+        assert!(!player_hand
+            .get_possible_actions()
+            .contains(&PossibleAction(Split)));
+        assert!(!player_hand2
+            .get_possible_actions()
+            .contains(&PossibleAction(Split)));
+        assert!(!player_hand3
+            .get_possible_actions()
+            .contains(&PossibleAction(Split)));
     }
 }

@@ -49,7 +49,7 @@ pub(crate) struct CustomShoe {
 }
 
 impl CustomShoe {
-    pub(crate) fn new(deck: Vec<u8>) -> Box<dyn Shoe> {
+    pub fn new(deck: Vec<u8>) -> Box<CustomShoe> {
         Box::new(CustomShoe { deck })
     }
 }

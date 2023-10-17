@@ -1,35 +1,39 @@
 use console::Term;
 use std::collections::HashMap;
 use vingt_et_un::shoe::StandardShoe;
-use vingt_et_un::table::{Game, };
-use vingt_et_un::{Action, HandStatus, PossibleAction};
-use vingt_et_un::round::Round;
+use vingt_et_un::{Action, Game, HandStatus, PlayerBalanceError, PossibleAction, Round};
 
 fn main() {
     print_banner();
     Game::start_game(StandardShoe::new(4), new_round, get_action);
 }
 
-fn new_round(game: &mut Game, last_round: &Round){
+fn new_round(game: &mut Game, last_round: &Round) {
     if game.get_player_balances().is_empty() {
         // update_player_balance returns an error if balance is negative. this
         // hardcoded value is positive, so unwrap is safe
-        game.update_player_balances(vec![100.0]).unwrap();
-    }else {
+        game.set_player_balances(vec![1000.0]).unwrap();
+    } else {
         print_game(last_round)
     }
 
-    println!("Choose an action: (r)ebet, (n)ew bet, (q)uit");
-    let bet_amount = loop {
-        match Term::stdout().read_char().unwrap() {
-            'q' => std::process::exit(0),
-            'r' => break last_round.player_hands[0].bet_amount,
-            'n' => break get_bet_amount(),
-            _ => println!("Invalid action"),
+    println!("Enter a new bet amount:");
+    loop {
+        match Term::stdout()
+            .read_line_initial_text(&game.get_bet(0, 0).unwrap().to_string())
+            .unwrap()
+            .parse()
+        {
+            Ok(x) => match game.set_bet(0, 0, x) {
+                Ok(_) => break,
+                Err(x) if matches!(x, PlayerBalanceError::BalanceCannotBeNegative) => {
+                    println!("Your balance is too low to bet that much. Enter lower bet.")
+                }
+                _ => panic!(), // player index and hand index of zero should always work
+            },
+            Err(_) => println!("That wasn't a valid number. Try again."),
         }
-    };
-
-    game.set_bet(0, bet_amount);
+    }
 }
 
 fn get_action(game: &Round, possible: Vec<PossibleAction>) -> PossibleAction {
@@ -76,37 +80,34 @@ fn get_action(game: &Round, possible: Vec<PossibleAction>) -> PossibleAction {
     }
 }
 
-fn get_bet_amount() -> f64 {
-    println!("Enter a new bet amount:");
-    loop {
-        let new_bet: Result<f64, _> = Term::stdout().read_line().unwrap().parse();
-        match new_bet {
-            Ok(x) => break x,
-            Err(_) => println!("Invalid value. Try again."),
-        }
-    }
-}
-
 fn print_game(round: &Round) {
     Term::stdout().clear_screen().unwrap();
     println!();
     print!(" Dealer Hand: ");
     if round.active_hand_index != round.player_hands.len() {
         println!("[?, {}]", round.dealer.cards[1]);
-        round.player_hands.iter().enumerate().for_each(|(i, position)| {
-            println!(
-                "{}Player Hand: {:?} {} {}   Bet: ${}",
-                if round.active_hand_index == i { ">" } else { " " },
-                position.hand.cards,
-                if position.hand.soft {
-                    format!("{}/{}", position.hand.value - 10, position.hand.value)
-                } else {
-                    position.hand.value.to_string()
-                },
-                hand_message(position.hand.status),
-                position.bet_amount,
-            )
-        });
+        round
+            .player_hands
+            .iter()
+            .enumerate()
+            .for_each(|(i, position)| {
+                println!(
+                    "{}Player Hand: {:?} {} {}   Bet: ${}",
+                    if round.active_hand_index == i {
+                        ">"
+                    } else {
+                        " "
+                    },
+                    position.hand.cards,
+                    if position.hand.soft {
+                        format!("{}/{}", position.hand.value - 10, position.hand.value)
+                    } else {
+                        position.hand.value.to_string()
+                    },
+                    hand_message(position.hand.status),
+                    position.bet_amount,
+                )
+            });
     } else {
         println!(
             "{:?} {} {}",

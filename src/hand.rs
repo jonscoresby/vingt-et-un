@@ -40,7 +40,7 @@ impl Hand {
         self.value
     }
 
-    pub(crate) fn calculate_value(&mut self){
+    pub(crate) fn calculate_value(&mut self) {
         let aces = self.cards.iter().filter(|&n| *n == 1).count();
         self.value = self.cards.iter().sum::<u8>();
 
@@ -76,7 +76,7 @@ mod hand_tests {
 
     #[test]
     fn hand_value_calculation() {
-        let mut shoe = CustomShoe::new(vec![7, 7, 7, 7]);
+        let mut shoe: Box<dyn Shoe> = CustomShoe::new(vec![7, 7, 7, 7]);
 
         let mut hand = Hand {
             cards: vec![],
@@ -100,7 +100,7 @@ mod hand_tests {
 
     #[test]
     fn soft_hand_value_calculation() {
-        let mut shoe = CustomShoe::new(vec![1, 9, 1, 1, 7]);
+        let mut shoe: Box<dyn Shoe> = CustomShoe::new(vec![1, 9, 1, 1, 7]);
 
         let mut hand = Hand {
             cards: vec![],
@@ -127,14 +127,14 @@ mod hand_tests {
 
     #[test]
     fn new_hand_blackjack() {
-        let mut shoe = CustomShoe::new(vec![10, 1]);
+        let mut shoe: Box<dyn Shoe> = CustomShoe::new(vec![10, 1]);
 
         let hand = Hand::new(&mut shoe);
         assert_eq!(hand.status, HandStatus::Blackjack);
     }
     #[test]
     fn hand_hit_twenty_one() {
-        let mut shoe = CustomShoe::new(vec![8, 8, 5]);
+        let mut shoe: Box<dyn Shoe> = CustomShoe::new(vec![8, 8, 5]);
 
         let mut hand = Hand::new(&mut shoe);
         hand.deal_card(&mut shoe);

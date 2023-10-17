@@ -1,6 +1,6 @@
 use crate::player_hand::PlayerHand;
 use crate::Hand;
-use crate::HandStatus::{Blackjack, Stood, Lose, Push, Value, Win};
+use crate::HandStatus::{Blackjack, Lose, Push, Stood, Value, Win};
 
 pub struct Round {
     pub player_hands: Vec<PlayerHand>,
@@ -17,7 +17,9 @@ impl Round {
                     player_hand.hand.status = Push;
                 }
                 (Blackjack, _) => player_hand.hand.status = Lose,
-                (_, Blackjack) => *player_hand.player_balance.borrow_mut() += player_hand.bet_amount * 5.0 / 2.0,
+                (_, Blackjack) => {
+                    *player_hand.player_balance.borrow_mut() += player_hand.bet_amount * 5.0 / 2.0
+                }
                 (_, _) => {}
             }
         }
@@ -60,29 +62,29 @@ impl Round {
 
 #[cfg(test)]
 mod round_tests {
-    use std::cell::RefCell;
-    use std::rc::Rc;
-    use crate::Hand;
-    use crate::HandStatus::{Blackjack, Lose, Push, Stood, Value, Win};
     use crate::player_hand::PlayerHand;
     use crate::round::Round;
     use crate::shoe::{CustomShoe, Shoe};
+    use crate::Hand;
+    use crate::HandStatus::{Blackjack, Lose, Push, Stood, Value, Win};
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     fn test_round(shoe: &mut Box<dyn Shoe>) -> Round {
-        Round{
+        Round {
             player_hands: vec![
-                PlayerHand{
+                PlayerHand {
                     hand: Hand::new(shoe),
                     bet_amount: 4.0,
                     player_balance: Rc::new(RefCell::new(10.0)),
                     split: false,
                 },
-                PlayerHand{
+                PlayerHand {
                     hand: Hand::new(shoe),
                     bet_amount: 4.0,
                     player_balance: Rc::new(RefCell::new(10.0)),
                     split: false,
-                }
+                },
             ],
             active_hand_index: 0,
             dealer: Hand::new(shoe),
@@ -91,7 +93,7 @@ mod round_tests {
 
     #[test]
     fn test_round_start_dealer_blackjack() {
-        let mut shoe = CustomShoe::new(vec![10, 1, 1, 10, 8, 8]);
+        let mut shoe: Box<dyn Shoe> = CustomShoe::new(vec![10, 1, 1, 10, 8, 8]);
         let mut round = test_round(&mut shoe);
         round.start();
         assert_eq!(Lose, round.player_hands[0].hand.status);
@@ -103,7 +105,7 @@ mod round_tests {
 
     #[test]
     fn test_round_start_no_dealer_blackjack() {
-        let mut shoe = CustomShoe::new(vec![8, 8, 1, 10, 8, 8]);
+        let mut shoe: Box<dyn Shoe> = CustomShoe::new(vec![8, 8, 1, 10, 8, 8]);
         let mut round = test_round(&mut shoe);
         round.start();
 
@@ -116,7 +118,7 @@ mod round_tests {
 
     #[test]
     fn test_round_update_second_active() {
-        let mut shoe = CustomShoe::new(vec![7, 8, 8, 8, 8, 7, 7]);
+        let mut shoe: Box<dyn Shoe> = CustomShoe::new(vec![7, 8, 8, 8, 8, 7, 7]);
         let mut round = test_round(&mut shoe);
         round.player_hands[0].hand.deal_card(&mut shoe);
 
@@ -129,7 +131,7 @@ mod round_tests {
 
     #[test]
     fn test_round_end() {
-        let mut shoe = CustomShoe::new(vec![1, 5, 8, 10, 8, 8, 7, 7]);
+        let mut shoe: Box<dyn Shoe> = CustomShoe::new(vec![1, 5, 8, 10, 8, 8, 7, 7]);
         let mut round = test_round(&mut shoe);
         round.player_hands[0].hand.deal_card(&mut shoe);
         round.player_hands[1].hand.deal_card(&mut shoe);
@@ -144,6 +146,4 @@ mod round_tests {
         assert_eq!(Lose, round.player_hands[1].hand.status);
         assert!(*round.player_hands[1].player_balance.borrow() < 10.01);
     }
-
-
 }
