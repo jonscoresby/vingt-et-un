@@ -2,6 +2,15 @@
 name = "vingt-et-un"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+authors = ["Jonathan Scoresby <dev@jonscoresby.com>"]
+description = "A blackjack engine"
+readme = "README.md"
+homepage = "https://github.com/jonscoresby/vingt-et-un"
+documentation = "https://github.com/jonscoresby/vingt-et-un"
+repository = "https://github.com/jonscoresby/vingt-et-un"
+keywords = ["blackjack", "twentyone", "cardgame", "gambling", "cards"]
+categories = ["game-engines", "game-development", "games", "command-line-utilities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
