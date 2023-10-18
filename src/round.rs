@@ -1,6 +1,6 @@
 use crate::player_hand::PlayerHand;
 use crate::Hand;
-use crate::HandStatus::{Blackjack, Lose, Push, Stood, Value, Win};
+use crate::HandStatus::{Blackjack, Bust, Lose, Push, Stood, Value, Win};
 
 pub struct Round {
     pub player_hands: Vec<PlayerHand>,
@@ -40,7 +40,7 @@ impl Round {
     pub(crate) fn end(&mut self) {
         for player_hand in &mut self.player_hands {
             if let Stood = player_hand.hand.status {
-                player_hand.hand.status = if let Value = self.dealer.status {
+                player_hand.hand.status = if self.dealer.status != Bust {
                     match player_hand.hand.value.cmp(&self.dealer.value) {
                         std::cmp::Ordering::Less => Lose,
                         std::cmp::Ordering::Equal => Push,
@@ -145,5 +145,19 @@ mod round_tests {
 
         assert_eq!(Lose, round.player_hands[1].hand.status);
         assert!(*round.player_hands[1].player_balance.borrow() < 10.01);
+    }
+
+    #[test]
+    fn test_dealer_twenty_one() {
+        let mut shoe: Box<dyn Shoe> = CustomShoe::new(vec![5, 6, 10, 10, 10, 10, 10]);
+        let mut round = test_round(&mut shoe);
+        round.player_hands[0].hand.status = Stood;
+        round.player_hands[1].hand.status = Stood;
+        round.dealer.dealer_turn(&mut shoe);
+
+        round.end();
+
+        assert_eq!(Lose, round.player_hands[0].hand.status);
+        assert_eq!(Lose, round.player_hands[1].hand.status);
     }
 }

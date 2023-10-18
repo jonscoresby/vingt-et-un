@@ -1,10 +1,10 @@
+use crate::game::PlayerBalanceError::{
+    BalanceCannotBeNegative, HandDoesNotExist, PlayerDoesNotExist,
+};
 use crate::hand::Hand;
 use crate::player_hand::PlayerHand;
 use crate::round::Round;
 use crate::shoe::Shoe;
-use crate::game::PlayerBalanceError::{
-    BalanceCannotBeNegative, HandDoesNotExist, PlayerDoesNotExist,
-};
 use crate::HandStatus::{Stood, Value};
 use crate::PossibleAction;
 use std::cell::RefCell;
